@@ -51,6 +51,11 @@ func (s *Server) handleFixturesReset(w http.ResponseWriter, r *http.Request) {
 	// authentication failure that looks like a bug.
 	s.clearSessionCookie(w)
 
+	// The rate limit counters are part of the world being rebuilt. Some are
+	// keyed on client address, so they would otherwise carry one caller's
+	// attempts across every reset for the life of the process.
+	s.services.ForgetRateLimits()
+
 	resp := fixturesResponse{
 		OK:          true,
 		Accounts:    map[string]string{},

@@ -69,7 +69,7 @@ func (f *Friends) RequestByEmail(ctx context.Context, actor *domain.Account, in 
 	if !f.limiter.allow("friendreq:hour:"+string(actor.ID), emailRequestsPerHour, time.Hour) {
 		return fmt.Errorf("%w: you have sent a lot of requests in the last hour. Please try again later", domain.ErrRateLimited)
 	}
-	if in.ClientKey != "" && !f.limiter.allow("friendreq:client:"+in.ClientKey, emailRequestsPerHour*2, time.Hour) {
+	if in.ClientKey != "" && !f.limiter.allow("friendreq:client:"+in.ClientKey, emailRequestsPerClientPerHour, time.Hour) {
 		return fmt.Errorf("%w: too many requests from here. Please try again later", domain.ErrRateLimited)
 	}
 

@@ -115,6 +115,13 @@ func (l *limiter) reset(key string) {
 	l.mu.Unlock()
 }
 
+// forgetAll drops every counter. See Services.ForgetRateLimits.
+func (l *limiter) forgetAll() {
+	l.mu.Lock()
+	l.windows = map[string]*window{}
+	l.mu.Unlock()
+}
+
 // The limits themselves. They are gathered here rather than scattered through
 // the services so that the whole abuse-resistance posture can be read at once.
 const (
@@ -138,9 +145,23 @@ const (
 
 	// Friend requests addressed by email. This is the important one: without
 	// it, the email route is a tool for testing whether an address belongs to
-	// somebody on Amici. Both windows apply.
+	// somebody on Amici. Both windows apply, and the day window is counted in
+	// the database so a restart does not hand anybody a fresh budget.
 	emailRequestsPerHour = 8
 	emailRequestsPerDay  = 25
+
+	// The same route, per client address. This one is not about a single
+	// account's behaviour but about one machine multiplying its reach by
+	// registering several accounts and spraying across them.
+	//
+	// It sits far above what one person sends, because a client address is a
+	// poor stand-in for a person: a family behind one home connection is a
+	// single address, a school is a single address, and a mobile network puts
+	// thousands of unrelated people behind a handful of them. Pitched at a
+	// household it would lock out an entire phone network, which is a worse
+	// failure than the one it prevents. The per-account limits above are the
+	// real anti-enumeration defence; this is a ceiling on one machine.
+	emailRequestsPerClientPerHour = 60
 
 	// Invite code redemption attempts. An invite code has around 2^58 of
 	// entropy, so this exists to make even a distributed guessing attempt

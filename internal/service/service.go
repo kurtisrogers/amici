@@ -35,6 +35,20 @@ type Services struct {
 	Canvas   *Canvas
 	Support  *Support
 	Insights *Insights
+
+	limiter *limiter
+}
+
+// ForgetRateLimits drops the in-process rate limit counters.
+//
+// This is for rebuilding the fixture world, and the endpoint that does that
+// exists only when fixtures are enabled, which config.Load refuses to allow in
+// production. Counters have to be part of the reset: some of them are keyed on
+// client address rather than on an account, so they outlive the accounts they
+// were counting and one test's attempts would still be held against the next
+// one. A reset that leaves them behind is not a reset.
+func (s *Services) ForgetRateLimits() {
+	s.limiter.forgetAll()
 }
 
 // New wires the services together.
@@ -53,6 +67,7 @@ func New(d Deps) *Services {
 		Canvas:   &Canvas{deps: d, limiter: limiter},
 		Support:  &Support{deps: d, limiter: limiter},
 		Insights: &Insights{deps: d},
+		limiter:  limiter,
 	}
 }
 
