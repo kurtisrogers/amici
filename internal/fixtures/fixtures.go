@@ -59,7 +59,7 @@ var People = []Person{
 		Role: domain.RoleMember, Colourway: "limonata", AgeYears: 34,
 		Bio:              "Tomatoes, terrible puns, three nieces.",
 		ReachableByEmail: true,
-		Note:             "The main member. Friends with Teo and Nina. Has a profile canvas.",
+		Note:             "The main member. Friends with Teo, Nina and Sofia. Has a profile canvas.",
 	},
 	{
 		Handle: "teo", DisplayName: "Teo Marchetti", Email: "teo@example.test",
@@ -80,7 +80,7 @@ var People = []Person{
 		Role: domain.RoleMember, Colourway: "pomodoro", AgeYears: 45,
 		Bio:              "Fixes things. Mostly bicycles.",
 		ReachableByEmail: true,
-		Note:             "A stranger to Rosa. Use this account to check that a non-friend sees nothing.",
+		Note:             "A stranger to Rosa in both directions, with no request pending either way. Use this account to check that a non-friend sees nothing.",
 	},
 	{
 		Handle: "sofia", DisplayName: "Sofia Marchetti", Email: "sofia@example.test",
