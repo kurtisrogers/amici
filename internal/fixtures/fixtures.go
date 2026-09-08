@@ -286,13 +286,20 @@ func Load(ctx context.Context, store domain.Store, clock domain.Clock, secret []
 	}
 
 	// A request Rosa has sent, so the withdraw path has something to act on.
+	//
+	// It is addressed to Marco rather than Bruno, and by code rather than by
+	// email, for two reasons. Marco has switched the email route off, so a
+	// code is the only way Rosa could have reached him, and Bruno has to stay
+	// a stranger to Rosa in both directions: a request from her sitting in his
+	// direction would mean his own request to her lands as a mutual
+	// acceptance and makes them friends on the spot.
 	if err := store.CreateFriendRequest(ctx, &domain.FriendRequest{
-		ID: domain.NewID(), FromID: rosa.ID, ToID: bruno.ID,
-		State: domain.RequestPending, Origin: domain.OriginEmail,
+		ID: domain.NewID(), FromID: rosa.ID, ToID: out.Accounts["quiet"].ID,
+		State: domain.RequestPending, Origin: domain.OriginInvite,
 		Note:      "Teo says you fixed his wheel.",
 		CreatedAt: now.Add(-2 * time.Hour),
 	}); err != nil {
-		return nil, fmt.Errorf("fixtures: rosa to bruno request: %w", err)
+		return nil, fmt.Errorf("fixtures: rosa to marco request: %w", err)
 	}
 
 	// Teo has blocked the account that has opted out of email requests, so

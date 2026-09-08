@@ -46,6 +46,44 @@ func TestRequestByEmailReachesTheRecipient(t *testing.T) {
 	}
 }
 
+// Two people who each ask for the other clearly want to be friends, so the
+// second request completes the first rather than stacking a second one that
+// somebody then has to go and click.
+func TestRequestsCrossingInBothDirectionsBecomeAFriendship(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+
+	rosa := h.member("rosa")
+	teo := h.member("teo")
+
+	if err := h.svc.Friends.RequestByEmail(h.ctx, rosa, EmailRequest{
+		Email: teo.Email,
+		Note:  "it is Rosa",
+	}); err != nil {
+		t.Fatalf("rosa's request: %v", err)
+	}
+	if err := h.svc.Friends.RequestByEmail(h.ctx, teo, EmailRequest{
+		Email: rosa.Email,
+		Note:  "it is Teo",
+	}); err != nil {
+		t.Fatalf("teo's request: %v", err)
+	}
+
+	for _, who := range []*domain.Account{rosa, teo} {
+		overview, err := h.svc.Friends.Overview(h.ctx, who)
+		if err != nil {
+			t.Fatalf("overview for @%s: %v", who.Handle, err)
+		}
+		if len(overview.Friends) != 1 {
+			t.Errorf("@%s has %d friends, want 1", who.Handle, len(overview.Friends))
+		}
+		if len(overview.Incoming) != 0 || len(overview.Outgoing) != 0 {
+			t.Errorf("@%s still has %d incoming and %d outgoing requests, want none left over",
+				who.Handle, len(overview.Incoming), len(overview.Outgoing))
+		}
+	}
+}
+
 // TestRequestByEmailSaysNothingEitherWay is the anti-enumeration test.
 //
 // A sender must not be able to tell an address with an account from an address
