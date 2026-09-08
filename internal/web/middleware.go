@@ -93,7 +93,13 @@ func (s *Server) secureHeaders(next http.Handler) http.Handler {
 		h.Set("Content-Security-Policy", appCSP)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
-		h.Set("Referrer-Policy", "no-referrer")
+		// same-origin rather than no-referrer. Both send nothing to a third
+		// party, which is the whole privacy goal, but no-referrer also makes
+		// the browser serialise the Origin header on our own form posts as
+		// the literal string "null", because Origin is derived from the
+		// referrer policy. That leaves the CSRF origin check with nothing
+		// truthful to compare and rejects every form on the site.
+		h.Set("Referrer-Policy", "same-origin")
 		// Amici has no use for any of these, and the quietest permission
 		// prompt is the one the browser never has to ask.
 		h.Set("Permissions-Policy", strings.Join([]string{

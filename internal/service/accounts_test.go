@@ -132,6 +132,71 @@ func TestSignInFailuresAreIndistinguishable(t *testing.T) {
 	}
 }
 
+// A household shares one client address. Signing in is not the thing being
+// rationed; guessing is. If a successful sign-in spent budget, the fourth
+// person in a family would be locked out by the first three.
+func TestSuccessfulSignInsAreNotRationed(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+
+	rosa := h.member("rosa")
+
+	for i := 0; i < signInFailuresPerClient*3; i++ {
+		if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+			Email:     rosa.Email,
+			Password:  testPassword,
+			ClientKey: "192.0.2.10",
+		}); err != nil {
+			t.Fatalf("sign-in %d of %d from the family address: %v", i+1, signInFailuresPerClient*3, err)
+		}
+	}
+}
+
+func TestRepeatedGuessingIsLockedOut(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+
+	rosa := h.member("rosa")
+	guess := func() error {
+		_, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+			Email:     rosa.Email,
+			Password:  "not-the-right-password",
+			ClientKey: "198.51.100.7",
+		})
+		return err
+	}
+
+	for i := 0; i < signInFailuresPerEmail; i++ {
+		if err := guess(); !errors.Is(err, domain.ErrCredentials) {
+			t.Fatalf("guess %d: want a credentials error, got %v", i+1, err)
+		}
+	}
+	if err := guess(); !errors.Is(err, domain.ErrRateLimited) {
+		t.Fatalf("after %d failures: want a rate limit, got %v", signInFailuresPerEmail, err)
+	}
+
+	// And the real password is refused too, because letting it through would
+	// make the lockout a way to test passwords rather than a stop to it.
+	if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+		Email:     rosa.Email,
+		Password:  testPassword,
+		ClientKey: "198.51.100.7",
+	}); !errors.Is(err, domain.ErrRateLimited) {
+		t.Errorf("while locked out: want a rate limit, got %v", err)
+	}
+
+	// Once the window has passed, they are let back in. A lockout that never
+	// lifts is a denial of service anybody can aim at anybody.
+	h.clock.Advance(signInWindow + time.Minute)
+	if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+		Email:     rosa.Email,
+		Password:  testPassword,
+		ClientKey: "198.51.100.7",
+	}); err != nil {
+		t.Errorf("after the window passed: %v", err)
+	}
+}
+
 func TestSuspendedAccountsCannotSignIn(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)

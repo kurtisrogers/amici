@@ -38,21 +38,16 @@ func newLimiter(clock domain.Clock) *limiter {
 	return &limiter{clock: clock, windows: map[string]*window{}}
 }
 
-// allow records an attempt against key and reports whether it is within limit.
+// allow records an attempt against key and reports whether it is within
+// limit. Use it where every call is itself the thing being rationed, such as
+// writing a post.
 func (l *limiter) allow(key string, limit int, per time.Duration) bool {
 	now := l.clock.Now()
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if now.Sub(l.lastSweep) > 10*time.Minute {
-		for k, w := range l.windows {
-			if now.After(w.resetAt) {
-				delete(l.windows, k)
-			}
-		}
-		l.lastSweep = now
-	}
+	l.sweep(now)
 
 	w, ok := l.windows[key]
 	if !ok || now.After(w.resetAt) {
@@ -66,6 +61,52 @@ func (l *limiter) allow(key string, limit int, per time.Duration) bool {
 	return true
 }
 
+// exceeded reports whether key has already reached limit, without recording
+// anything. Pair it with record where only some outcomes are chargeable.
+func (l *limiter) exceeded(key string, limit int) bool {
+	now := l.clock.Now()
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	w, ok := l.windows[key]
+	if !ok || now.After(w.resetAt) {
+		return false
+	}
+	return w.count >= limit
+}
+
+// record counts one attempt against key, whatever the current total.
+func (l *limiter) record(key string, per time.Duration) {
+	now := l.clock.Now()
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.sweep(now)
+
+	w, ok := l.windows[key]
+	if !ok || now.After(w.resetAt) {
+		l.windows[key] = &window{count: 1, resetAt: now.Add(per)}
+		return
+	}
+	w.count++
+}
+
+// sweep drops expired keys so the map cannot grow without bound. The caller
+// holds the mutex.
+func (l *limiter) sweep(now time.Time) {
+	if now.Sub(l.lastSweep) <= 10*time.Minute {
+		return
+	}
+	for k, w := range l.windows {
+		if now.After(w.resetAt) {
+			delete(l.windows, k)
+		}
+	}
+	l.lastSweep = now
+}
+
 // reset clears a key, used after a successful sign-in so that a member who
 // mistyped their password a few times is not still being throttled.
 func (l *limiter) reset(key string) {
@@ -77,10 +118,17 @@ func (l *limiter) reset(key string) {
 // The limits themselves. They are gathered here rather than scattered through
 // the services so that the whole abuse-resistance posture can be read at once.
 const (
-	// Sign-in attempts, per email address and per client address. Two keys so
-	// that neither a single account nor a single network can be hammered.
-	signInAttemptsPerEmail  = 10
-	signInAttemptsPerClient = 30
+	// Failed sign-in attempts, per email address and per client address. Two
+	// keys so that neither a single account nor a single network can be
+	// hammered.
+	//
+	// Only failures count, and a success clears the slate. Charging
+	// successful sign-ins would rate-limit a household: a family behind one
+	// home connection, or a school, shares a client address, and those are
+	// precisely the people Amici is for. Credential guessing is made of
+	// failures, so failures are what is worth counting.
+	signInFailuresPerEmail  = 10
+	signInFailuresPerClient = 30
 	signInWindow            = 15 * time.Minute
 
 	// Registrations from one client address. Low, because Amici does not grow

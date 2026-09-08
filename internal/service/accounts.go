@@ -143,12 +143,24 @@ type Credentials struct {
 // the session token to put in a cookie; the token is never stored.
 func (a *Accounts) SignIn(ctx context.Context, in Credentials) (*domain.Account, string, error) {
 	emailNorm := domain.NormaliseEmail(in.Email)
+	clientKey := "signin:client:" + in.ClientKey
+	emailKey := "signin:email:" + emailNorm
 
-	if in.ClientKey != "" && !a.limiter.allow("signin:client:"+in.ClientKey, signInAttemptsPerClient, signInWindow) {
+	// Both budgets are checked before any work is done, and spent only by a
+	// failure further down. See signInFailuresPerClient for why.
+	if in.ClientKey != "" && a.limiter.exceeded(clientKey, signInFailuresPerClient) {
 		return nil, "", fmt.Errorf("%w: too many sign-in attempts. Please wait a few minutes", domain.ErrRateLimited)
 	}
-	if emailNorm != "" && !a.limiter.allow("signin:email:"+emailNorm, signInAttemptsPerEmail, signInWindow) {
+	if emailNorm != "" && a.limiter.exceeded(emailKey, signInFailuresPerEmail) {
 		return nil, "", fmt.Errorf("%w: too many sign-in attempts for that account. Please wait a few minutes", domain.ErrRateLimited)
+	}
+	failed := func() {
+		if in.ClientKey != "" {
+			a.limiter.record(clientKey, signInWindow)
+		}
+		if emailNorm != "" {
+			a.limiter.record(emailKey, signInWindow)
+		}
 	}
 
 	acct, err := a.deps.Store.AccountByEmail(ctx, emailNorm)
@@ -159,6 +171,7 @@ func (a *Accounts) SignIn(ctx context.Context, in Credentials) (*domain.Account,
 			// belongs to an account, and that is the one fact Amici most needs
 			// to keep to itself.
 			security.BurnPasswordTime(in.Password)
+			failed()
 			return nil, "", domain.ErrCredentials
 		}
 		return nil, "", fmt.Errorf("look up account: %w", err)
@@ -169,6 +182,7 @@ func (a *Accounts) SignIn(ctx context.Context, in Credentials) (*domain.Account,
 		return nil, "", fmt.Errorf("verify password for %s: %w", acct.ID, err)
 	}
 	if !ok {
+		failed()
 		return nil, "", domain.ErrCredentials
 	}
 
@@ -199,7 +213,12 @@ func (a *Accounts) SignIn(ctx context.Context, in Credentials) (*domain.Account,
 		return nil, "", err
 	}
 
-	a.limiter.reset("signin:email:" + emailNorm)
+	// They have proved who they are, so this account's budget should not
+	// still be holding their earlier typos against them. The client budget is
+	// deliberately left alone: clearing it would let somebody with one valid
+	// account of their own wipe the counter between guesses at everybody
+	// else's, which is exactly the spraying that limit exists to stop.
+	a.limiter.reset(emailKey)
 	a.deps.audit(ctx, acct.ID, domain.AuditAccountSignIn, string(acct.ID), "")
 	return acct, token, nil
 }

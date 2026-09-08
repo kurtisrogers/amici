@@ -91,13 +91,32 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 
 // verifyOrigin checks that a state-changing request came from Amici.
 func (s *Server) verifyOrigin(r *http.Request) error {
+	// Sec-Fetch-Site is the browser's own answer to the question this
+	// function is asking, and it cannot be set by page script. When it is
+	// present it is the most trustworthy signal available, so it decides.
+	//
+	//   same-origin  the request came from a page on this origin
+	//   none         the person typed the address or used a bookmark
+	//   same-site    a sibling subdomain; Amici has none, so this is not us
+	//   cross-site   another site entirely
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "same-origin", "none":
+		return nil
+	case "same-site", "cross-site":
+		return fmt.Errorf("%w: that request did not come from Amici", domain.ErrForbidden)
+	}
+
 	origin := r.Header.Get("Origin")
+	if origin == "null" {
+		// An opaque origin: a sandboxed frame, or a document with a
+		// no-referrer policy. The profile canvas runs in exactly such a
+		// frame, so this is the case that must not be waved through.
+		return fmt.Errorf("%w: that request came from a sandboxed page", domain.ErrForbidden)
+	}
 	if origin == "" {
 		// Some clients send Referer but not Origin. Fall back to it rather
 		// than rejecting, since the token check is still in force.
-		if ref := r.Header.Get("Referer"); ref != "" {
-			origin = ref
-		}
+		origin = r.Header.Get("Referer")
 	}
 	if origin == "" {
 		// No Origin and no Referer. This is what a stripped-down script sends,
