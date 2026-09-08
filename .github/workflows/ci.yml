@@ -1,0 +1,123 @@
+name: CI
+
+# Every pull request, and every push to main. A pull request is the moment
+# somebody is about to trust this code, so it is the moment worth spending
+# machine time on.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same branch makes the first run's answer worthless,
+# so cancel it rather than paying for both.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Read from go.mod so the version lives in one place and CI cannot
+          # quietly test against something the module does not claim to support.
+          go-version-file: go.mod
+          cache: true
+
+      - name: Formatting
+        # gofmt -l prints files that need formatting, and exits zero either
+        # way, so the check is that it printed nothing.
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "${unformatted}" ]; then
+            echo "These files are not gofmt-clean:" >&2
+            echo "${unformatted}" >&2
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      - name: Tests
+        # -race because the rate limiter and the session store are shared
+        # across requests, and a data race there is exactly the kind of fault
+        # that never shows up on one developer's machine.
+        run: go test -race -count=1 ./...
+
+      - name: Sanitiser fuzzing
+        # A short burst on every pull request. Long enough to catch a mistake
+        # in a change to the canvas sanitiser, short enough not to hold up a
+        # review. The corpus of anything it finds is uploaded below.
+        run: go test -run '^$' -fuzz FuzzSanitiseNeverEmitsScript -fuzztime 60s ./internal/security/canvas/
+
+      - name: Upload fuzz findings
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus
+          path: internal/security/canvas/testdata/fuzz/
+          if-no-files-found: ignore
+
+  e2e:
+    name: Browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install the suite
+        working-directory: e2e
+        # npm ci rather than npm install, so the lockfile is what runs.
+        run: npm ci
+
+      - name: Install browsers
+        working-directory: e2e
+        # --with-deps pulls the system libraries Chromium needs on a bare
+        # runner. Chromium only: the suite's two projects are a desktop and a
+        # phone viewport of the same engine, and Amici ships no JavaScript, so
+        # a second engine would mostly be re-testing HTML parsing.
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the suite
+        working-directory: e2e
+        # The Playwright config builds and starts the server itself against a
+        # throwaway SQLite file with fixtures enabled.
+        run: npx playwright test
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Upload failure artefacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          # Traces, screenshots and video for whatever failed. Enough to
+          # understand a failure without reproducing it locally first.
+          name: playwright-results
+          path: e2e/test-results/
+          retention-days: 14
