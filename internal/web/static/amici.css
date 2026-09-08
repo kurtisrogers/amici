@@ -391,13 +391,35 @@ body {
 
 /* -------------------------------------------------------------- lists etc */
 
+/* Pico declares `ul li { list-style: square }` on the item itself, and a value
+   declared on an element always beats one inherited from its parent whatever
+   the specificity. So `list-style: none` on one of our own lists does nothing
+   on its own: the marker has to be turned off on the item. Every Amici list
+   that is a layout rather than a list of prose is gathered here, once, so the
+   next one added is a line in this selector rather than a stray square
+   somebody notices in a screenshot.
+
+   Lists that really are lists - the notices on a canvas save, the facts about
+   an account in the support console - keep their markers on purpose. */
+.amici-people > li,
+.amici-invite-list > li,
+.amici-stickers > li,
+.amici-pledges > li,
+.amici-footer ul > li {
+  list-style: none;
+}
+
+/* A person card holds an avatar, a name, a handle and up to two actions. At
+   15rem those did not fit: names broke across lines and the second button was
+   clipped by the card. 21rem is what the widest of them needs, and the column
+   count still drops to one on a phone. */
 .amici-people {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
   gap: 0.6rem;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
 }
 
 .amici-person {
@@ -410,8 +432,19 @@ body {
   background: var(--pico-card-background-color);
 }
 
+/* The name column takes the slack and gives it back rather than pushing the
+   actions out of the card. min-width: 0 is what allows a flex item to shrink
+   below the width of its own text. */
+.amici-person > div { flex: 1 1 auto; min-width: 0; }
+
 .amici-person__name { font-weight: 700; }
-.amici-person__actions { margin-left: auto; display: flex; gap: 0.3rem; }
+
+.amici-person__actions {
+  margin-left: auto;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.3rem;
+}
 
 .amici-inline-form { display: inline; margin: 0; }
 
