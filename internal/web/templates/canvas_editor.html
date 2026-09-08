@@ -1,0 +1,162 @@
+{{template "head" .}}
+{{$c := .Data.Canvas}}
+
+<h1>Your page</h1>
+<p class="amici-lede">
+  This is the bit of {{.Brand.Name}} that works like the web used to. Write
+  your own HTML and CSS, and your friends see it on your profile.
+</p>
+
+{{if .Data.Disabled}}
+  <div class="amici-flash amici-flash--warn" role="alert">
+    <p>
+      <strong>Your customisation is switched off at the moment.</strong>
+      Support has set your profile to render plain, usually after a report.
+      Nothing you wrote has been deleted or edited, and you can still work on
+      it here. Get in touch with support and they can switch it back on.
+    </p>
+  </div>
+{{end}}
+
+{{/* Sanitiser notices are not shown here. They describe one particular save
+     and arrive as a flash on the redirect from it, which is the moment they
+     are useful. Re-deriving them on every visit would show somebody a list of
+     complaints about markup they fixed weeks ago. */}}
+
+<form method="post" action="/settings/canvas" class="amici-card amici-editor">
+  {{template "csrf" .CSRF}}
+
+  <label for="canvas-html">Your HTML</label>
+  <textarea id="canvas-html" name="html" rows="16" spellcheck="false"
+    maxlength="{{.Data.Limits.HTMLMaxLen}}"
+    placeholder="&lt;marquee&gt;welcome to my page&lt;/marquee&gt;">{{$c.HTMLSource}}</textarea>
+  <small>Up to {{.Data.Limits.HTMLMaxLen}} characters.</small>
+
+  <label for="canvas-css">Your CSS</label>
+  <textarea id="canvas-css" name="css" rows="12" spellcheck="false"
+    maxlength="{{.Data.Limits.CSSMaxLen}}"
+    placeholder="h1 { color: hotpink; text-shadow: 2px 2px 0 gold; }">{{$c.CSSSource}}</textarea>
+  <small>
+    Up to {{.Data.Limits.CSSMaxLen}} characters. Every selector you write is
+    scoped inside your page, so you cannot restyle {{.Brand.Name}} itself.
+  </small>
+
+  <div class="amici-btn-row">
+    <button type="submit">Save my page</button>
+    <a href="/u/{{.Data.Handle}}" role="button" class="secondary outline">See it</a>
+  </div>
+</form>
+
+<form method="post" action="/settings/canvas/clear" class="amici-card amici-card--quiet">
+  {{template "csrf" .CSRF}}
+  <h2>Start again</h2>
+  <p>Clears your HTML and CSS. Your posts, friends and account are untouched.</p>
+  <button type="submit" class="secondary">Make my page plain</button>
+</form>
+
+{{if not $c.Empty}}
+  <h2>What it looks like</h2>
+  <iframe class="amici-canvas-frame" src="/u/{{.Data.Handle}}/canvas"
+    title="A preview of your page"
+    sandbox="allow-popups allow-popups-to-escape-sandbox"
+    referrerpolicy="no-referrer" loading="lazy"></iframe>
+  <p class="amici-canvas-note">
+    This is the real thing, in the same sandbox your friends see it in, from the
+    same sanitised copy. Saved {{timeAgo $c.UpdatedAt}}.
+  </p>
+{{end}}
+
+<section class="amici-card">
+  <h2>What you can use</h2>
+  <p>
+    We keep the decoration and remove anything that could run code, fetch from
+    another website, or pretend to be {{.Brand.Name}} asking your visitor for
+    their password. When something goes, we tell you exactly what and why.
+  </p>
+
+  <details open>
+    <summary>Tags</summary>
+    <p>
+      Headings, paragraphs, <code>div</code>, <code>span</code>, lists,
+      <code>blockquote</code>, <code>pre</code>, <code>details</code>, and the
+      whole family of tables, because people built entire layouts out of those
+      and we are not going to stop them.
+    </p>
+    <p>
+      The nostalgia is deliberate: <code>marquee</code>, <code>blink</code>,
+      <code>font</code>, <code>center</code>, <code>big</code>,
+      <code>tt</code>, <code>nobr</code>, <code>strike</code>,
+      <code>sub</code>, <code>sup</code>, <code>u</code> and
+      <code>marquee</code> inside <code>marquee</code> if you really want.
+    </p>
+  </details>
+
+  <details>
+    <summary>Styling</summary>
+    <p>
+      Colours, fonts, shadows, borders, radii, gradients, transforms,
+      flexbox, grid, <code>@media</code>, <code>@supports</code> and
+      <code>@keyframes</code>, so animation is on the table.
+    </p>
+    <p>
+      Your selectors are rewritten to sit beneath
+      <code>#amici-canvas</code>, so your page cannot reach out and restyle
+      the site around it. <code>position: fixed</code> and negative
+      <code>z-index</code> tricks are turned down, because a box that floats
+      over the page is a box that can be made to look like ours.
+    </p>
+  </details>
+
+  <details>
+    <summary>Links and images</summary>
+    <p>
+      Links are welcome. They are given <code>rel="noopener noreferrer"</code>
+      and made to open in a new tab, so the site you link to never learns whose
+      page sent the visitor.
+    </p>
+    <p>
+      Images must come from {{.Brand.Name}} itself, or be a small
+      <code>data:</code> image you paste inline. An image hosted elsewhere
+      would tell that host the address of everybody who looks at your page,
+      including people who never agreed to that, so we do not allow it. The
+      stickers below are ours and cost your visitors nothing.
+    </p>
+  </details>
+
+  <details>
+    <summary>What always goes</summary>
+    <p>
+      Script of any kind, event handlers such as <code>onclick</code>,
+      <code>iframe</code>, <code>object</code>, <code>embed</code>,
+      <code>form</code> and <code>input</code>, anything that loads a font or
+      stylesheet from elsewhere, and <code>meta refresh</code>. Forms and
+      password fields are the important ones: a convincing fake sign-in box on
+      a profile page is the oldest trick there is, and the only reliable
+      defence is that it cannot exist here.
+    </p>
+  </details>
+</section>
+
+<section class="amici-card">
+  <h2>Stickers</h2>
+  <p>
+    Ours, served from here, free to use. Copy a path into an
+    <code>img</code> tag.
+  </p>
+  <ul class="amici-stickers">
+    {{range .Data.Stickers}}
+      <li class="amici-sticker">
+        <img src="{{stickerPath .}}" alt="{{.}}" width="36" height="36">
+        <code>{{stickerPath .}}</code>
+      </li>
+    {{end}}
+  </ul>
+</section>
+
+<p class="amici-meta">
+  Sanitiser version {{.Data.Limits.SanitiserVersion}}. If we ever tighten these
+  rules, saved pages get put through the new version and you will see fresh
+  notices here rather than quietly losing something.
+</p>
+
+{{template "foot" .}}

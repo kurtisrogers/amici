@@ -1,0 +1,26 @@
+# Build output
+/bin/
+/dist/
+
+# Local development database and fixtures state
+*.db
+*.db-shm
+*.db-wal
+/tmp/
+/.amici/
+
+# Go
+/vendor/
+
+# Node / Playwright
+/e2e/node_modules/
+/e2e/test-results/
+/e2e/playwright-report/
+/e2e/blob-report/
+/e2e/.cache/
+
+# Editors and OS noise
+.DS_Store
+*.swp
+.idea/
+.vscode/

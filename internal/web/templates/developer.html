@@ -1,0 +1,85 @@
+{{template "head" .}}
+{{$d := .Data.Diagnostics}}
+
+<h1>Developer</h1>
+<p class="amici-lede">
+  Health and schema. There is nothing on this page about any individual
+  member, because operating {{.Brand.Name}} does not require reading anybody's
+  posts, and a console that offered it would eventually be used.
+</p>
+
+<div class="amici-columns">
+  <section class="amici-card">
+    <h2>Runtime</h2>
+    <ul>
+      <li>Environment: <strong>{{$d.Environment}}</strong></li>
+      <li>Go: {{$d.GoVersion}}</li>
+      <li>Up for {{duration $d.Uptime}}</li>
+      <li>Goroutines: {{$d.Goroutines}}</li>
+      <li>Heap in use: {{bytes $d.HeapInUseBytes}}</li>
+      <li>Server time: {{niceTime $d.Now}}</li>
+    </ul>
+  </section>
+
+  <section class="amici-card">
+    <h2>Data</h2>
+    <ul>
+      <li>Accounts: {{$d.AccountCount}}</li>
+      <li>Sanitiser version: {{$d.SanitiserVersion}}</li>
+      <li>
+        Profiles awaiting the current sanitiser:
+        <strong>{{$d.StaleCanvases}}</strong>
+      </li>
+    </ul>
+
+    {{if $d.StaleCanvases}}
+      <p>
+        Those profiles are rendering plain until they go through the current
+        sanitiser, which is the safe direction to fail but not where anybody
+        wants to stay.
+      </p>
+      <form method="post" action="/developer/canvas/rerender">
+        {{template "csrf" .CSRF}}
+        <button type="submit">Re-render a batch</button>
+      </form>
+    {{else}}
+      <p class="amici-meta">Every stored profile matches the current sanitiser.</p>
+    {{end}}
+  </section>
+</div>
+
+<section class="amici-card">
+  <h2>Migrations</h2>
+  <ol>
+    {{range $d.Migrations}}<li><code>{{.}}</code></li>{{end}}
+  </ol>
+</section>
+
+<section class="amici-card amici-card--quiet">
+  <h2>Recent privileged actions</h2>
+  <p class="amici-meta">
+    Everything support and developers have done lately, across all such
+    accounts. This exists so that the people with power over accounts are
+    visible to each other.
+  </p>
+  {{if .Data.AuditTrail}}
+    <table class="amici-audit">
+      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Subject</th><th>Note</th></tr></thead>
+      <tbody>
+        {{range .Data.AuditTrail}}
+          <tr>
+            <td>{{niceTime .CreatedAt}}</td>
+            <td><code>{{.ActorID}}</code></td>
+            <td>{{.Action}}</td>
+            <td><code>{{.SubjectID}}</code></td>
+            <td>{{.Detail}}</td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+  {{else}}
+    <p>Nothing yet.</p>
+  {{end}}
+</section>
+
+{{template "foot" .}}

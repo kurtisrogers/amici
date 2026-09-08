@@ -1,0 +1,33 @@
+{{template "head" .}}
+
+<div class="amici-narrow">
+  <h1>Welcome back</h1>
+  <p><span class="amici-promise">{{.Brand.Promise}}</span></p>
+
+  <form method="post" action="/signin" class="amici-card">
+    {{template "csrf" .CSRF}}
+
+    {{with .Data.Error}}
+      <div class="amici-flash amici-flash--bad" role="alert"><p>{{.}}</p></div>
+    {{end}}
+
+    <label for="email">Email address</label>
+    <input type="email" id="email" name="email" value="{{.Data.Email}}"
+      autocomplete="username" required autofocus>
+
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password"
+      autocomplete="current-password" required>
+
+    <button type="submit">Sign in</button>
+  </form>
+
+  <p class="amici-meta">
+    Forgotten your password? Nobody can reset it for you from a form, because
+    a form that resets passwords is a form that takes over accounts. Ask
+    support and they will help you prove the account is yours.
+  </p>
+  <p>New here? <a href="/signup">Join {{.Brand.Name}}</a>.</p>
+</div>
+
+{{template "foot" .}}

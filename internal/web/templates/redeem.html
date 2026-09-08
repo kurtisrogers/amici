@@ -1,0 +1,39 @@
+{{template "head" .}}
+
+<div class="amici-narrow">
+  <h1>Use a request code</h1>
+  <p>
+    Somebody gave you a code, so type it in below. It works once, and only for
+    a day after they made it.
+  </p>
+
+  <form method="post" action="/friends/redeem" class="amici-card">
+    {{template "csrf" .CSRF}}
+
+    {{with .Data.Error}}
+      <div class="amici-flash amici-flash--bad" role="alert"><p>{{.}}</p></div>
+    {{end}}
+
+    <label for="code">The code</label>
+    <input type="text" id="code" name="code" value="{{.Data.Code}}"
+      autocomplete="off" spellcheck="false" autocapitalize="characters" required autofocus>
+    <small>
+      Letters and numbers, dashes optional. Capitals do not matter, and we are
+      relaxed about the characters people mix up when reading aloud.
+    </small>
+
+    <label for="note">A line so they know it is you</label>
+    <input type="text" id="note" name="note" placeholder="It's Lucia, from next door">
+
+    <button type="submit">Send my request</button>
+  </form>
+
+  <p class="amici-meta">
+    Using a code sends a friend request; it does not make you friends on its
+    own. They still get the last word, because a code can be passed along and
+    the person it came from should decide who ends up in their life.
+  </p>
+  <p><a href="/friends">Back to friends</a></p>
+</div>
+
+{{template "foot" .}}

@@ -1,0 +1,56 @@
+{{/*
+  A member's profile canvas, as its own document.
+
+  This is the only template in Amici that emits markup it did not write
+  itself, and the two helpers below are the only calls to canvasHTML and
+  canvasCSS anywhere in the codebase. Everything reaching them has been
+  through both sanitiser passes at save time, and the document is served with
+  a default-src 'none' policy, script-src 'none', and a sandbox that grants
+  neither allow-scripts nor allow-same-origin.
+
+  If you are changing this file, the thing to keep hold of is that the safety
+  does not come from any one of those measures. It comes from all of them
+  being true at once. Adding a script tag "just for the preview", relaxing the
+  sandbox on the parent iframe, or piping anything other than HTMLRendered and
+  CSSRendered through these helpers removes a layer that the others were never
+  designed to cover for.
+
+  Note what is not here: no stylesheet of ours, no fonts, no analytics, no
+  favicon. A visitor's browser makes no request to anybody, not even to us,
+  beyond this document and any images the member referenced from our own
+  origin.
+*/}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<title>{{.Who}}'s page</title>
+<style>
+/* The frame is transparent so that the member's own background decides what
+   the box looks like, and #amici-canvas is the scope every sanitised selector
+   was rewritten beneath. */
+html, body { margin: 0; padding: 0; background: transparent; }
+#amici-canvas {
+  font-family: "Trebuchet MS", system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+#amici-canvas img { max-width: 100%; height: auto; }
+/* Somebody who asked their system for less movement gets less movement, even
+   inside somebody else's marquee. */
+@media (prefers-reduced-motion: reduce) {
+  #amici-canvas *, #amici-canvas *::before, #amici-canvas *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+{{canvasCSS .CSS}}
+</style>
+</head>
+<body>
+<div id="amici-canvas">{{canvasHTML .HTML}}</div>
+</body>
+</html>
