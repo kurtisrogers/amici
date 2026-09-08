@@ -77,10 +77,9 @@
       <form method="post" action="/support/accounts/{{.ID}}/canvas">
         {{template "csrf" $.CSRF}}
         <input type="hidden" name="disable" value="{{if .CanvasDisabled}}false{{else}}true{{end}}">
-        <label for="canvas-reason">
-          Why are you
-          {{if .CanvasDisabled}}switching their page back on{{else}}making their page plain{{end}}?
-        </label>
+        {{/* One line on purpose: a label split across lines puts stray
+             whitespace in the accessible name a screen reader announces. */}}
+        <label for="canvas-reason">Why are you {{if .CanvasDisabled}}switching their page back on{{else}}making their page plain{{end}}?</label>
         <textarea id="canvas-reason" name="reason" rows="2" required></textarea>
         <button type="submit" class="secondary">
           {{if .CanvasDisabled}}Allow customisation again{{else}}Render their page plain{{end}}
