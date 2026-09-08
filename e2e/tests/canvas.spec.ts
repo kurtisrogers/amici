@@ -162,6 +162,17 @@ test("images may only come from Amici", async ({ page }) => {
   // who looks at the profile, including people who never agreed to it.
   await expect(frame.locator('img[src^="/static/"]')).toHaveCount(1);
   await expect(frame.locator('img[src^="http"]')).toHaveCount(0);
+
+  // And ours actually renders. Surviving the sanitiser is not the same as
+  // reaching the member: the frame is sandboxed to an opaque origin, so a
+  // header meant to protect private resources can block Amici's own
+  // decoration and leave nothing but alt text behind. naturalWidth is zero
+  // for an image the browser refused to load.
+  await expect
+    .poll(async () =>
+      frame.locator('img[src^="/static/"]').evaluate((img: HTMLImageElement) => img.naturalWidth),
+    )
+    .toBeGreaterThan(0);
 });
 
 test("links out are made safe", async ({ page }) => {

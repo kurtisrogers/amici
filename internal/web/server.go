@@ -110,6 +110,22 @@ func (s *Server) staticHandler(assets fs.FS) http.Handler {
 		} else {
 			w.Header().Set("Cache-Control", "no-cache")
 		}
+
+		// Deliberately relaxing the Cross-Origin-Resource-Policy that
+		// secureHeaders sets for everything else.
+		//
+		// The profile canvas frame is sandboxed without allow-same-origin, so
+		// its origin is opaque and a request from it for a sticker is a
+		// cross-origin request as far as the browser is concerned.
+		// same-origin therefore blocks Amici's own decoration from loading in
+		// Amici's own frame, which is how the sticker set came to be broken.
+		//
+		// Nothing under /static is private: a stylesheet and sixteen
+		// decorative SVGs, identical for every member. CORP exists to stop
+		// another site embedding a resource whose *content* is a secret, and
+		// there is no secret here to protect.
+		w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
+
 		fileServer.ServeHTTP(w, r)
 	}))
 }
