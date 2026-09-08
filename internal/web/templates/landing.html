@@ -1,0 +1,79 @@
+{{template "head" .}}
+
+<section class="amici-hero">
+  <h1>Somewhere quiet, for the people you love</h1>
+  <p>
+    {{.Brand.Name}} is a small social network for your friends and your family.
+    Only your friends see what you post. Nobody can look you up. There is no
+    feed deciding what you should be angry about today.
+  </p>
+  <p><span class="amici-promise">{{.Brand.Promise}}</span></p>
+  <p class="amici-btn-row amici-btn-row--centred">
+    <a href="/signup" role="button">Join {{.Brand.Name}}</a>
+    <a href="/signin" role="button" class="secondary outline">Sign in</a>
+  </p>
+</section>
+
+<ul class="amici-pledges">
+  <li class="amici-pledge">
+    <strong>Nobody can find you</strong>
+    <span>
+      There is no search, no directory and no "people you may know". Somebody
+      reaches you because they already know your email address, or because you
+      handed them a request code yourself.
+    </span>
+  </li>
+  <li class="amici-pledge">
+    <strong>Codes expire in a day</strong>
+    <span>
+      A request code lasts twenty four hours and works once. Nothing you share
+      today becomes a permanent way in.
+    </span>
+  </li>
+  <li class="amici-pledge">
+    <strong>Friends only, always</strong>
+    <span>
+      Every post is for confirmed friends or for you alone. There is no public
+      option to click by accident, because we did not build one.
+    </span>
+  </li>
+  <li class="amici-pledge">
+    <strong>No companies</strong>
+    <span>
+      An account is a person. There are no pages, no brands and no advertisers,
+      so there is nothing here that wants your attention for a living.
+    </span>
+  </li>
+  <li class="amici-pledge">
+    <strong>Your page, your markup</strong>
+    <span>
+      Write the HTML of your own profile, the way the web used to work. We
+      sanitise it hard and put it in a sandbox, then get out of your way.
+    </span>
+  </li>
+  <li class="amici-pledge">
+    <strong>Nothing to crawl</strong>
+    <span>
+      Search engines are turned away at the door, and behind the door every
+      page needs a friendship anyway. There is no version of {{.Brand.Name}}
+      that a stranger can read.
+    </span>
+  </li>
+</ul>
+
+<section class="amici-card amici-card--quiet">
+  <h2>Why bother building this</h2>
+  <p>
+    The large platforms make money when you keep scrolling, and the surest way
+    to keep somebody scrolling is to upset them. That business model has done a
+    great deal of damage, and it is not the only way to put people in touch.
+  </p>
+  <p>
+    {{.Brand.Name}} is the small version. No ranking, no advertising, no
+    engagement targets, no growth loops, nothing sold about you to anybody. It
+    costs what it costs to run and no more.
+    <a href="/about">The longer version is here</a>.
+  </p>
+</section>
+
+{{template "foot" .}}

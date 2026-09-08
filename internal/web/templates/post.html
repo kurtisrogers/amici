@@ -1,0 +1,12 @@
+{{template "head" .}}
+
+<p class="amici-meta"><a href="/feed">&larr; Back to your friends' posts</a></p>
+
+{{template "post" (item $ .Data.Item (printf "/posts/%s" .Data.Item.Post.ID) true)}}
+
+<p class="amici-meta">
+  Only {{.Data.Item.Author.DisplayName}}'s friends can open this page. There is
+  no link that shows it to anybody else.
+</p>
+
+{{template "foot" .}}

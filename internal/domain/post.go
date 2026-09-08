@@ -42,6 +42,12 @@ func (v Visibility) Label() string {
 	}
 }
 
+// Private reports whether a post is the author's own journal entry rather
+// than something their friends can read. The interface marks these, because
+// the worst surprise a social network can hand somebody is being wrong about
+// who could see what they wrote.
+func (v Visibility) Private() bool { return v == VisibilityOnlyMe }
+
 // PostBodyMaxLen caps a post. Long enough for a proper update, short enough
 // that nobody is writing a newsletter here.
 const PostBodyMaxLen = 5000
@@ -116,6 +122,32 @@ type FeedItem struct {
 	YourReaction ReactionKind
 	CommentCount int
 	Comments     []CommentView
+}
+
+// TallyFor returns the tally for one reaction kind, including a zero tally
+// for a kind nobody has used.
+//
+// The store only counts reactions that exist, which is the right thing for it
+// to do, but the interface renders the whole row of kinds every time so that
+// the buttons do not move around as counts change. This is the join between
+// the two, and it lives here rather than in a template because a template
+// cannot express a lookup without a helper that hides the cost.
+func (i FeedItem) TallyFor(k ReactionKind) ReactionTally {
+	for _, t := range i.Reactions {
+		if t.Kind == k {
+			return t
+		}
+	}
+	return ReactionTally{Kind: k}
+}
+
+// MoreComments reports how many comments exist beyond the ones loaded with the
+// post, which is what turns into "see all 12" under a busy thread.
+func (i FeedItem) MoreComments() int {
+	if n := i.CommentCount - len(i.Comments); n > 0 {
+		return n
+	}
+	return 0
 }
 
 // CommentView is a comment plus its author's card.

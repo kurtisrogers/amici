@@ -51,6 +51,10 @@ const (
 	AuditCanvasPublished = "canvas.published"
 	AuditReportResolved  = "support.report.resolved"
 	AuditPasswordChanged = "account.password.changed"
+	// AuditRoleChanged records granting or removing support and developer
+	// access. It is only ever written by the amiciadmin command, because
+	// there is no screen anywhere in Amici that can hand out power.
+	AuditRoleChanged = "account.role.changed"
 )
 
 // ReportState is the triage lifecycle of a member report.

@@ -1,0 +1,32 @@
+{{template "head" .}}
+
+<div class="amici-narrow amici-empty">
+  <h1>{{.Data.Heading}}</h1>
+  <p>{{.Data.Message}}</p>
+
+  {{if eq .Data.Status 404}}
+    <p class="amici-meta">
+      {{/*
+        This page is also the answer to "show me somebody I am not friends
+        with". A viewer who is not allowed to know an account exists gets the
+        same response as somebody who typed a handle nobody ever registered,
+        and neither of them can tell which they are looking at. That is the
+        whole trick, and it only works while this page says nothing useful.
+      */}}
+      On {{.Brand.Name}} there is no difference between something that is not
+      here and something that is not yours. Both look like this.
+    </p>
+  {{end}}
+
+  <p class="amici-btn-row amici-btn-row--centred">
+    {{if .Viewer}}
+      <a href="/feed" role="button">Your friends' posts</a>
+      <a href="/friends" role="button" class="secondary outline">Friends</a>
+    {{else}}
+      <a href="/" role="button">Back to the front</a>
+      <a href="/signin" role="button" class="secondary outline">Sign in</a>
+    {{end}}
+  </p>
+</div>
+
+{{template "foot" .}}

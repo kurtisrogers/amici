@@ -1,0 +1,854 @@
+/*
+ * Amici's brand layer, sitting on top of Pico CSS.
+ *
+ * Pico is doing the heavy lifting: sensible typography, forms that already
+ * work, and a light and dark scheme. Everything here is either a colourway or
+ * a component Pico does not have an opinion about, which keeps this file
+ * something a person can read in one sitting.
+ *
+ * The colourways are the fun part. Each one overrides Pico's own custom
+ * properties, so choosing a palette genuinely re-skins the whole interface
+ * rather than tinting a button. They are named after things you would find in
+ * an Italian kitchen, or out of the window above it.
+ *
+ * There is no JavaScript in Amici's critical path. Every page works with
+ * forms and links alone, which means it works on a decade-old phone, on a bad
+ * connection, and with scripting switched off.
+ */
+
+/* ---------------------------------------------------------------- palettes */
+
+:root {
+  --amici-radius: 14px;
+  --amici-radius-sm: 9px;
+  --amici-shadow: 0 1px 2px rgba(70, 40, 60, 0.06), 0 6px 18px rgba(70, 40, 60, 0.06);
+  --amici-shadow-lift: 0 2px 4px rgba(70, 40, 60, 0.08), 0 12px 32px rgba(70, 40, 60, 0.1);
+  --pico-border-radius: var(--amici-radius-sm);
+  --pico-font-family: "Nunito", "Trebuchet MS", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --pico-font-weight: 450;
+  --pico-line-height: 1.6;
+}
+
+/* Limonata: lemons on a bright kitchen table. The default, because it is the
+   most cheerful thing in the set. */
+[data-colourway="limonata"] {
+  --amici-accent: #f2b705;
+  --amici-accent-deep: #b98700;
+  --amici-ink: #4a3c05;
+  --amici-wash-a: #fff8dd;
+  --amici-wash-b: #fdf1e7;
+  --amici-chip: #fff2c2;
+  --pico-primary: #7a5a00;
+  --pico-primary-background: #f2b705;
+  --pico-primary-hover-background: #dba500;
+  --pico-primary-underline: rgba(122, 90, 0, 0.4);
+  --pico-primary-focus: rgba(242, 183, 5, 0.35);
+  --pico-primary-inverse: #3d2f00;
+}
+
+/* Fico: ripe figs, warm and a bit purple. */
+[data-colourway="fico"] {
+  --amici-accent: #8d5a97;
+  --amici-accent-deep: #6b3f75;
+  --amici-ink: #3f2545;
+  --amici-wash-a: #f8eefb;
+  --amici-wash-b: #fdeff3;
+  --amici-chip: #f1e0f6;
+  --pico-primary: #6b3f75;
+  --pico-primary-background: #8d5a97;
+  --pico-primary-hover-background: #7a4a84;
+  --pico-primary-underline: rgba(107, 63, 117, 0.4);
+  --pico-primary-focus: rgba(141, 90, 151, 0.35);
+  --pico-primary-inverse: #fff;
+}
+
+/* Cielo: that first clear morning after the rain. */
+[data-colourway="cielo"] {
+  --amici-accent: #3fa7d6;
+  --amici-accent-deep: #21789f;
+  --amici-ink: #12384a;
+  --amici-wash-a: #ecf7fd;
+  --amici-wash-b: #eefaf6;
+  --amici-chip: #d9eefa;
+  --pico-primary: #1d6d90;
+  --pico-primary-background: #3fa7d6;
+  --pico-primary-hover-background: #3494c0;
+  --pico-primary-underline: rgba(29, 109, 144, 0.4);
+  --pico-primary-focus: rgba(63, 167, 214, 0.35);
+  --pico-primary-inverse: #fff;
+}
+
+/* Pomodoro: tomatoes on the vine, Sunday sauce. */
+[data-colourway="pomodoro"] {
+  --amici-accent: #e05252;
+  --amici-accent-deep: #b13636;
+  --amici-ink: #4d1c1c;
+  --amici-wash-a: #fdeeee;
+  --amici-wash-b: #fdf4e8;
+  --amici-chip: #fadddd;
+  --pico-primary: #a83232;
+  --pico-primary-background: #e05252;
+  --pico-primary-hover-background: #cc4646;
+  --pico-primary-underline: rgba(168, 50, 50, 0.4);
+  --pico-primary-focus: rgba(224, 82, 82, 0.35);
+  --pico-primary-inverse: #fff;
+}
+
+/* Menta: mint on the windowsill. */
+[data-colourway="menta"] {
+  --amici-accent: #3aa981;
+  --amici-accent-deep: #257b5c;
+  --amici-ink: #13402f;
+  --amici-wash-a: #eaf8f2;
+  --amici-wash-b: #f4faea;
+  --amici-chip: #d6f0e5;
+  --pico-primary: #1f6f52;
+  --pico-primary-background: #3aa981;
+  --pico-primary-hover-background: #329672;
+  --pico-primary-underline: rgba(31, 111, 82, 0.4);
+  --pico-primary-focus: rgba(58, 169, 129, 0.35);
+  --pico-primary-inverse: #fff;
+}
+
+/* Notte: late evening, everyone still talking. */
+[data-colourway="notte"] {
+  --amici-accent: #5b6ee1;
+  --amici-accent-deep: #3c4cb5;
+  --amici-ink: #232a52;
+  --amici-wash-a: #eef0fd;
+  --amici-wash-b: #f6eefb;
+  --amici-chip: #e0e4fb;
+  --pico-primary: #3a49ad;
+  --pico-primary-background: #5b6ee1;
+  --pico-primary-hover-background: #4e60cd;
+  --pico-primary-underline: rgba(58, 73, 173, 0.4);
+  --pico-primary-focus: rgba(91, 110, 225, 0.35);
+  --pico-primary-inverse: #fff;
+}
+
+/* ------------------------------------------------------------------ layout */
+
+body {
+  /* The wash is what stops the page feeling like a form. It is two very pale
+     stops from the current colourway, fixed so it does not scroll away. */
+  background:
+    linear-gradient(170deg, var(--amici-wash-a) 0%, var(--amici-wash-b) 45%, var(--pico-background-color) 100%)
+    no-repeat fixed;
+  min-height: 100vh;
+}
+
+.amici-shell {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 0 1rem 4rem;
+}
+
+/* ------------------------------------------------------------------ header */
+
+.amici-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding: 1rem 0 0.5rem;
+}
+
+.amici-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--amici-ink);
+  text-decoration: none;
+}
+
+.amici-wordmark:hover { text-decoration: none; }
+
+/* The dot after the wordmark is the whole logo. A social network does not
+   need a mark that takes six weeks to sign off. */
+.amici-wordmark::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--amici-accent);
+  display: inline-block;
+  margin-left: -0.2rem;
+}
+
+.amici-tagline {
+  font-size: 0.85rem;
+  color: var(--pico-muted-color);
+  margin: 0;
+  flex: 1 1 14rem;
+}
+
+.amici-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-left: auto;
+}
+
+.amici-nav a,
+.amici-nav button {
+  font-size: 0.9rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--pico-primary);
+  width: auto;
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.amici-nav a:hover,
+.amici-nav button:hover {
+  background: var(--amici-chip);
+  text-decoration: none;
+}
+
+.amici-nav a[aria-current="page"] {
+  background: var(--amici-accent);
+  color: var(--pico-primary-inverse);
+}
+
+.amici-nav .amici-badge {
+  background: var(--amici-accent-deep);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0 0.4rem;
+  font-size: 0.75rem;
+  margin-left: 0.3rem;
+}
+
+.amici-nav__signout { font-family: inherit; }
+
+/* ------------------------------------------------------------------- cards */
+
+.amici-card {
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--amici-radius);
+  box-shadow: var(--amici-shadow);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.amici-card > :last-child { margin-bottom: 0; }
+
+.amici-card h2,
+.amici-card h3 { margin-bottom: 0.5rem; }
+
+.amici-card--quiet {
+  background: transparent;
+  box-shadow: none;
+  border-style: dashed;
+}
+
+.amici-card--accent {
+  border-color: var(--amici-accent);
+  border-width: 2px;
+}
+
+/* ----------------------------------------------------------------- avatars */
+
+.amici-avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--pico-primary-inverse);
+  background: var(--amici-accent);
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+
+.amici-avatar--sm { width: 2rem; height: 2rem; font-size: 0.8rem; }
+.amici-avatar--lg { width: 4.5rem; height: 4.5rem; font-size: 1.6rem; }
+
+/* Each colourway gets its own avatar colour, so a friend list is a row of
+   different people rather than a row of identical circles. */
+.amici-avatar[data-colourway="limonata"] { background: #f2b705; color: #3d2f00; }
+.amici-avatar[data-colourway="fico"] { background: #8d5a97; }
+.amici-avatar[data-colourway="cielo"] { background: #3fa7d6; }
+.amici-avatar[data-colourway="pomodoro"] { background: #e05252; }
+.amici-avatar[data-colourway="menta"] { background: #3aa981; }
+.amici-avatar[data-colourway="notte"] { background: #5b6ee1; }
+
+/* ------------------------------------------------------------------- posts */
+
+.amici-post { margin-bottom: 1.25rem; }
+
+.amici-post__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.amici-post__who { display: flex; flex-direction: column; line-height: 1.3; }
+.amici-post__who a { font-weight: 700; text-decoration: none; color: var(--amici-ink); }
+.amici-post__who a:hover { text-decoration: underline; }
+
+.amici-meta {
+  font-size: 0.8rem;
+  color: var(--pico-muted-color);
+}
+
+.amici-post__body p { margin-bottom: 0.6rem; }
+.amici-post__body > :last-child { margin-bottom: 0; }
+
+.amici-post__body {
+  /* Member text is escaped by the template, but it can still contain very
+     long unbroken strings. Wrapping them stops one pasted URL from stretching
+     the whole layout sideways. */
+  overflow-wrap: anywhere;
+}
+
+.amici-visibility {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  color: var(--pico-muted-color);
+}
+
+/* --------------------------------------------------------------- reactions */
+
+.amici-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin: 0.75rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--pico-muted-border-color);
+}
+
+.amici-reactions form { margin: 0; display: inline; }
+
+.amici-react {
+  border: 1px solid var(--pico-muted-border-color);
+  background: var(--pico-card-background-color);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  cursor: pointer;
+  width: auto;
+  margin: 0;
+  color: var(--pico-color);
+  transition: transform 0.08s ease, background 0.12s ease;
+}
+
+.amici-react:hover { background: var(--amici-chip); transform: translateY(-1px); }
+
+.amici-react[aria-pressed="true"] {
+  background: var(--amici-chip);
+  border-color: var(--amici-accent);
+  font-weight: 700;
+}
+
+.amici-react__count { font-size: 0.8rem; margin-left: 0.2rem; }
+
+/* ---------------------------------------------------------------- comments */
+
+.amici-comments {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--pico-muted-border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.amici-comment { display: flex; gap: 0.6rem; align-items: flex-start; }
+
+.amici-comment__body {
+  background: var(--amici-chip);
+  border-radius: var(--amici-radius-sm);
+  padding: 0.5rem 0.75rem;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+.amici-comment__body p { margin: 0 0 0.35rem; }
+.amici-comment__body > :last-child { margin-bottom: 0; }
+
+.amici-comment__author { font-weight: 700; font-size: 0.9rem; }
+
+/* -------------------------------------------------------------- lists etc */
+
+.amici-people {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+
+.amici-person {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--amici-radius-sm);
+  padding: 0.6rem 0.75rem;
+  background: var(--pico-card-background-color);
+}
+
+.amici-person__name { font-weight: 700; }
+.amici-person__actions { margin-left: auto; display: flex; gap: 0.3rem; }
+
+.amici-inline-form { display: inline; margin: 0; }
+
+.amici-btn-small {
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 999px;
+}
+
+.amici-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.amici-btn-row button,
+.amici-btn-row a[role="button"] { width: auto; margin: 0; }
+
+/* -------------------------------------------------------------- the notice */
+
+.amici-flash {
+  border-radius: var(--amici-radius);
+  padding: 0.9rem 1.1rem;
+  margin: 0 0 1.25rem;
+  border: 1px solid;
+  box-shadow: var(--amici-shadow);
+}
+
+.amici-flash--good { background: #edfaf1; border-color: #7cc79a; color: #14532d; }
+.amici-flash--warn { background: #fff8e6; border-color: #e6bb4a; color: #5c4106; }
+.amici-flash--bad { background: #fdeeee; border-color: #e08484; color: #5f1717; }
+
+.amici-flash p { margin: 0; }
+.amici-flash ul { margin: 0.5rem 0 0; padding-left: 1.2rem; font-size: 0.9rem; }
+.amici-flash li { margin-bottom: 0.25rem; }
+
+/* --------------------------------------------------------------- colourway */
+
+.amici-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.amici-swatch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border: 2px solid var(--pico-muted-border-color);
+  border-radius: var(--amici-radius-sm);
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  background: var(--pico-card-background-color);
+  flex: 1 1 12rem;
+}
+
+/* The radio is visually hidden rather than display:none, so it stays in the
+   accessibility tree and keeps working with a keyboard. */
+.amici-swatch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
+.amici-swatch:has(input:checked) {
+  border-color: var(--amici-accent-deep);
+  background: var(--amici-chip);
+}
+
+.amici-swatch:has(input:focus-visible) {
+  outline: 3px solid var(--pico-primary-focus);
+  outline-offset: 2px;
+}
+
+.amici-swatch__chip {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.amici-swatch__label { font-weight: 700; font-size: 0.9rem; }
+.amici-swatch__note { font-size: 0.75rem; color: var(--pico-muted-color); }
+
+/* -------------------------------------------------------- the invite code */
+
+.amici-code {
+  font-family: var(--pico-font-family-monospace, ui-monospace, monospace);
+  font-size: clamp(1.1rem, 4vw, 1.6rem);
+  letter-spacing: 0.08em;
+  background: var(--amici-chip);
+  border: 2px dashed var(--amici-accent-deep);
+  border-radius: var(--amici-radius-sm);
+  padding: 0.75rem 1rem;
+  display: block;
+  text-align: center;
+  overflow-wrap: anywhere;
+  margin-bottom: 0.75rem;
+}
+
+.amici-invite-list { list-style: none; padding: 0; margin: 0; }
+
+.amici-invite {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  font-size: 0.9rem;
+}
+
+.amici-invite:last-child { border-bottom: 0; }
+
+.amici-state {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-weight: 700;
+}
+
+.amici-state--active { background: #edfaf1; color: #14532d; }
+.amici-state--used { background: var(--amici-chip); color: var(--amici-ink); }
+.amici-state--expired,
+.amici-state--revoked { background: #f2f2f2; color: #555; }
+
+/* ------------------------------------------------------------- the canvas */
+
+/* The frame holding a member's own markup. It is sized generously and given a
+   soft edge, so it reads as "their page, inside our page" rather than as an
+   advert slot. */
+.amici-canvas-frame {
+  width: 100%;
+  min-height: 24rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--amici-radius);
+  background: #fff;
+  display: block;
+  box-shadow: var(--amici-shadow);
+}
+
+.amici-canvas-note {
+  font-size: 0.8rem;
+  color: var(--pico-muted-color);
+  margin: 0.4rem 0 1.25rem;
+}
+
+.amici-editor textarea {
+  font-family: var(--pico-font-family-monospace, ui-monospace, monospace);
+  font-size: 0.85rem;
+  min-height: 16rem;
+  line-height: 1.5;
+}
+
+.amici-stickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.amici-sticker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.65rem;
+  color: var(--pico-muted-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--amici-radius-sm);
+  padding: 0.4rem;
+  background: var(--pico-card-background-color);
+  width: 4.5rem;
+}
+
+.amici-sticker img { width: 2.25rem; height: 2.25rem; }
+.amici-sticker code { font-size: 0.6rem; word-break: break-all; }
+
+/* --------------------------------------------------------------- the rest */
+
+.amici-footer {
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--pico-muted-border-color);
+  font-size: 0.85rem;
+  color: var(--pico-muted-color);
+}
+
+.amici-footer ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.5rem;
+}
+
+.amici-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--pico-muted-color);
+}
+
+.amici-empty h2 { color: var(--amici-ink); }
+
+.amici-columns {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
+.amici-role {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 800;
+  background: var(--amici-accent-deep);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+
+.amici-audit {
+  font-size: 0.8rem;
+  font-family: var(--pico-font-family-monospace, ui-monospace, monospace);
+}
+
+.amici-audit td { padding: 0.3rem 0.5rem; }
+
+.amici-hero {
+  text-align: center;
+  padding: 2.5rem 0 1.5rem;
+}
+
+.amici-hero h1 {
+  font-size: clamp(2.1rem, 7vw, 3.4rem);
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.03em;
+  color: var(--amici-ink);
+}
+
+.amici-hero p { font-size: 1.1rem; max-width: 34rem; margin: 0 auto 0.75rem; }
+
+.amici-promise {
+  display: inline-block;
+  background: var(--amici-chip);
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  font-weight: 700;
+  color: var(--amici-ink);
+}
+
+.amici-pledges {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  text-align: left;
+}
+
+.amici-pledge {
+  border: 1px solid var(--pico-muted-border-color);
+  border-left: 4px solid var(--amici-accent);
+  border-radius: var(--amici-radius-sm);
+  padding: 0.85rem 1rem;
+  background: var(--pico-card-background-color);
+}
+
+.amici-pledge strong { display: block; color: var(--amici-ink); }
+.amici-pledge span { font-size: 0.9rem; color: var(--pico-muted-color); }
+
+/* A single column of text, for the pages that are one thing: sign in, join,
+   redeem a code, an error. */
+.amici-narrow {
+  max-width: 30rem;
+  margin: 0 auto;
+}
+
+.amici-lede {
+  font-size: 1.05rem;
+  color: var(--pico-muted-color);
+  max-width: 44rem;
+}
+
+.amici-btn-row--centred { justify-content: center; }
+
+/* ---------------------------------------------------------------- composer */
+
+.amici-composer textarea { margin-bottom: 0.75rem; }
+
+/* Pico makes form controls full width, which is right for a form and wrong
+   for a select sitting next to a button. */
+.amici-select-inline {
+  width: auto;
+  margin: 0;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.amici-composer .amici-btn-row button { margin: 0; }
+
+/* ----------------------------------------------------------------- reports */
+
+/* Reporting is folded away by default. It should be findable on every post
+   and not shouted about on any of them. */
+.amici-report {
+  margin: 0;
+  margin-left: auto;
+  border: 0;
+  padding: 0;
+}
+
+.amici-report summary {
+  font-size: 0.8rem;
+  color: var(--pico-muted-color);
+  cursor: pointer;
+}
+
+.amici-report form {
+  margin-top: 0.5rem;
+  min-width: 16rem;
+}
+
+.amici-report textarea { font-size: 0.85rem; }
+
+.amici-reactions__own { margin-left: auto; }
+
+.amici-report-card {
+  border: 1px solid var(--pico-muted-border-color);
+  border-left: 4px solid var(--amici-accent);
+  border-radius: var(--amici-radius-sm);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.amici-report-card blockquote {
+  margin: 0.5rem 0;
+  font-size: 0.95rem;
+}
+
+/* ----------------------------------------------------------------- profile */
+
+.amici-profile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.amici-profile__who { flex: 1 1 16rem; }
+.amici-profile__who h1 { margin-bottom: 0.2rem; }
+.amici-profile__bio { margin: 0.5rem 0 0; overflow-wrap: anywhere; }
+
+.amici-profile__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.amici-quote {
+  font-style: italic;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.amici-code--link {
+  font-size: 0.8rem;
+  letter-spacing: 0;
+  text-align: left;
+  border-style: solid;
+  border-width: 1px;
+}
+
+/* The swatch chips reuse the avatar colours, so the picker shows the palette
+   rather than describing it. */
+.amici-swatch__chip[data-colourway="limonata"] { background: #f2b705; }
+.amici-swatch__chip[data-colourway="fico"] { background: #8d5a97; }
+.amici-swatch__chip[data-colourway="cielo"] { background: #3fa7d6; }
+.amici-swatch__chip[data-colourway="pomodoro"] { background: #e05252; }
+.amici-swatch__chip[data-colourway="menta"] { background: #3aa981; }
+.amici-swatch__chip[data-colourway="notte"] { background: #5b6ee1; }
+
+/* Only ever visible to a screen reader. */
+.amici-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A skip link, hidden until focused. */
+.amici-skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--amici-accent);
+  color: var(--pico-primary-inverse);
+  padding: 0.6rem 1rem;
+  border-radius: 0 0 var(--amici-radius-sm) 0;
+  z-index: 10;
+  font-weight: 700;
+}
+
+.amici-skip:focus { left: 0; }
+
+/* Somebody who has asked their system for less movement gets less movement,
+   including inside a member's profile canvas. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

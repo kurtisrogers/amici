@@ -1,0 +1,151 @@
+{{template "head" .}}
+
+<h1>Support</h1>
+<p class="amici-lede">
+  Everything you do here is written down against your name, and members can
+  report anything you resolve. You cannot read anybody's posts, comments,
+  friends or profile markup from this console, and that is on purpose: the
+  most common way a support tool hurts people is by making private things
+  routine to look at.
+</p>
+
+<section class="amici-card">
+  <h2>Find an account</h2>
+  <p class="amici-meta">
+    For helping somebody back into their own account. This is a lookup, not a
+    search: you need the exact address or handle, because a tool that matches
+    partial names is a tool for browsing strangers.
+  </p>
+  <form method="post" action="/support/lookup">
+    {{template "csrf" .CSRF}}
+    <label for="term">Email address or handle</label>
+    <input type="text" id="term" name="term" value="{{.Data.LookupTerm}}"
+      autocomplete="off" spellcheck="false" required>
+    <fieldset>
+      <legend class="amici-sr">Look up by</legend>
+      <label><input type="radio" name="by" value="email" checked> Email address</label>
+      <label><input type="radio" name="by" value="handle"> Handle</label>
+    </fieldset>
+    <button type="submit">Look up</button>
+  </form>
+
+  {{with .Data.LookupErr}}
+    <div class="amici-flash amici-flash--bad" role="alert"><p>{{.}}</p></div>
+  {{end}}
+</section>
+
+{{with .Data.Found}}
+  <section class="amici-card amici-card--accent">
+    <h2>{{.DisplayName}} <span class="amici-meta">@{{.Handle}}</span></h2>
+    <ul>
+      <li>Account: <code>{{.ID}}</code></li>
+      <li>Email address: {{.Email}}</li>
+      <li>Kind of account: {{.Role.Label}}</li>
+      <li>Status: <strong>{{.Status}}</strong></li>
+      <li>Joined {{niceDate .CreatedAt}}</li>
+      <li>{{.FriendCount}} {{pluralise .FriendCount "friend" "friends"}},
+          {{.PostCount}} {{pluralise .PostCount "post" "posts"}}</li>
+      <li>Profile customisation: {{if .CanvasDisabled}}<strong>switched off</strong>{{else}}on{{end}}</li>
+      {{if .IsYoungMember}}
+        <li><strong>Under eighteen.</strong> Extra protections apply and
+            nobody can reach them by email address.</li>
+      {{end}}
+    </ul>
+    <p class="amici-meta">
+      Counts, not content. There is no way from here to read what they wrote or
+      who their friends are.
+    </p>
+
+    <div class="amici-columns">
+      {{if eq .Status "active"}}
+        <form method="post" action="/support/accounts/{{.ID}}/suspend">
+          {{template "csrf" $.CSRF}}
+          <label for="suspend-reason">Why are you suspending this account?</label>
+          <textarea id="suspend-reason" name="reason" rows="2" required></textarea>
+          <button type="submit" class="secondary">Suspend</button>
+          <small>Closes every session they have open. Your name goes on the record.</small>
+        </form>
+      {{else}}
+        <form method="post" action="/support/accounts/{{.ID}}/restore">
+          {{template "csrf" $.CSRF}}
+          <label for="restore-reason">Why are you restoring it?</label>
+          <textarea id="restore-reason" name="reason" rows="2" required></textarea>
+          <button type="submit">Restore</button>
+        </form>
+      {{end}}
+
+      <form method="post" action="/support/accounts/{{.ID}}/canvas">
+        {{template "csrf" $.CSRF}}
+        <input type="hidden" name="disable" value="{{if .CanvasDisabled}}false{{else}}true{{end}}">
+        <label for="canvas-reason">
+          Why are you
+          {{if .CanvasDisabled}}switching their page back on{{else}}making their page plain{{end}}?
+        </label>
+        <textarea id="canvas-reason" name="reason" rows="2" required></textarea>
+        <button type="submit" class="secondary">
+          {{if .CanvasDisabled}}Allow customisation again{{else}}Render their page plain{{end}}
+        </button>
+        <small>
+          Never edits their markup. Nobody at {{$.Brand.Name}} rewrites
+          somebody else's page; it either renders or it does not.
+        </small>
+      </form>
+    </div>
+  </section>
+{{end}}
+
+<section class="amici-card">
+  <h2>Open reports {{if .Data.Reports}}<span class="amici-meta">({{len .Data.Reports}})</span>{{end}}</h2>
+  {{if .Data.Reports}}
+    {{range .Data.Reports}}
+      <article class="amici-report-card">
+        <p class="amici-meta">
+          {{.Report.SubjectKind}} &middot; reported {{timeAgo .Report.CreatedAt}}
+          by {{.Reporter.DisplayName}} (@{{.Reporter.Handle}})
+          &middot; subject <code>{{.Report.SubjectID}}</code>
+        </p>
+        <blockquote>{{range paragraphs .Report.Reason}}<p>{{.}}</p>{{end}}</blockquote>
+        <form method="post" action="/support/reports/{{.Report.ID}}/resolve">
+          {{template "csrf" $.CSRF}}
+          <label for="resolution-{{.Report.ID}}">What did you do?</label>
+          <textarea id="resolution-{{.Report.ID}}" name="resolution" rows="2" required></textarea>
+          <div class="amici-btn-row">
+            <button type="submit" name="outcome" value="resolve">Acted on it</button>
+            <button type="submit" name="outcome" value="dismiss" class="secondary outline">
+              Nothing to do
+            </button>
+          </div>
+        </form>
+      </article>
+    {{end}}
+    <p class="amici-meta">
+      A report is a member's description of something. Reports are the only way
+      content reaches this console; nobody is reading feeds looking for it.
+    </p>
+  {{else}}
+    <p>Nothing waiting. Good.</p>
+  {{end}}
+</section>
+
+<section class="amici-card amici-card--quiet">
+  <h2>What you have done</h2>
+  {{if .Data.AuditTrail}}
+    <table class="amici-audit">
+      <thead><tr><th>When</th><th>Action</th><th>Subject</th><th>Note</th></tr></thead>
+      <tbody>
+        {{range .Data.AuditTrail}}
+          <tr>
+            <td>{{niceTime .CreatedAt}}</td>
+            <td>{{.Action}}</td>
+            <td><code>{{.SubjectID}}</code></td>
+            <td>{{.Detail}}</td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+  {{else}}
+    <p>Nothing yet.</p>
+  {{end}}
+</section>
+
+{{template "foot" .}}

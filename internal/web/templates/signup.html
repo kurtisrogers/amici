@@ -1,0 +1,59 @@
+{{template "head" .}}
+
+<div class="amici-narrow">
+  <h1>Join {{.Brand.Name}}</h1>
+  <p>
+    Nobody will be able to find you here. Once you are in, you reach the people
+    you know by email address or by handing them a request code.
+  </p>
+
+  <form method="post" action="/signup" class="amici-card">
+    {{template "csrf" .CSRF}}
+
+    {{with .Data.Error}}
+      <div class="amici-flash amici-flash--bad" role="alert"><p>{{.}}</p></div>
+    {{end}}
+
+    <label for="display_name">Your name</label>
+    <input type="text" id="display_name" name="display_name" value="{{.Data.DisplayName}}"
+      autocomplete="name" required autofocus>
+    <small>Whatever your friends call you. It does not have to be your legal name.</small>
+
+    <label for="handle">Handle</label>
+    <input type="text" id="handle" name="handle" value="{{.Data.Handle}}"
+      autocomplete="off" spellcheck="false" required>
+    <small>
+      Lowercase letters, numbers, dots, dashes and underscores. This is the
+      address of your page, and only your friends can open it.
+    </small>
+
+    <label for="email">Email address</label>
+    <input type="email" id="email" name="email" value="{{.Data.Email}}"
+      autocomplete="email" required>
+    <small>
+      Used to sign in, and to let somebody who already knows this address send
+      you a friend request. You can turn that off later.
+    </small>
+
+    <label for="birth_date">Date of birth</label>
+    <input type="date" id="birth_date" name="birth_date" value="{{.Data.BirthDate}}" required>
+    <small>
+      You need to be at least {{.Data.MinimumAge}}. Members under eighteen get
+      stricter protection: nobody can reach them by email address at all.
+    </small>
+
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password"
+      autocomplete="new-password" required minlength="{{.Data.PasswordMin}}">
+    <small>
+      At least {{.Data.PasswordMin}} characters. A few unrelated words you will
+      actually remember beats a short jumble you will write on a note.
+    </small>
+
+    <button type="submit">Create my account</button>
+  </form>
+
+  <p>Already have an account? <a href="/signin">Sign in</a>.</p>
+</div>
+
+{{template "foot" .}}

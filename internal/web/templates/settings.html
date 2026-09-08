@@ -1,0 +1,140 @@
+{{template "head" .}}
+
+<h1>Settings</h1>
+
+<section class="amici-card">
+  <h2>You</h2>
+  <form method="post" action="/settings/profile">
+    {{template "csrf" .CSRF}}
+
+    <label for="display_name">Your name</label>
+    <input type="text" id="display_name" name="display_name" value="{{.Viewer.DisplayName}}" required>
+
+    <label for="bio">A line about you</label>
+    <textarea id="bio" name="bio" rows="3" maxlength="{{.Data.BioMaxLength}}">{{.Viewer.Bio}}</textarea>
+    <small>
+      Plain text, shown above your page to friends only. At most
+      {{.Data.BioMaxLength}} characters.
+    </small>
+
+    <fieldset class="amici-swatches">
+      <legend>Your colourway</legend>
+      {{range .Brand.Palettes}}
+        <label class="amici-swatch">
+          <input type="radio" name="colourway" value="{{.Slug}}"
+            {{if eq $.Viewer.Colourway .Slug}}checked{{end}}>
+          <span class="amici-swatch__chip" data-colourway="{{.Slug}}"></span>
+          <span>
+            <span class="amici-swatch__label">{{.Label}}</span>
+            <br><span class="amici-swatch__note">{{.Note}}</span>
+          </span>
+        </label>
+      {{end}}
+    </fieldset>
+
+    {{if .Data.YoungMember}}
+      <p class="amici-flash amici-flash--warn">
+        You are under eighteen, so nobody can send you a friend request using
+        your email address, whatever anyone types in. A code you choose to hand
+        over is the only way to reach you, and your codes expire in four hours.
+        This is not a setting you or we can switch off.
+      </p>
+    {{else}}
+      <label for="reachable_by_email">
+        <input type="checkbox" id="reachable_by_email" name="reachable_by_email" role="switch"
+          {{if .Viewer.ReachableByEmail}}checked{{end}}>
+        Let somebody who already knows my email address send me a request
+      </label>
+      <small>
+        Turn this off and request codes become the only way to reach you. We
+        never confirm to a sender whether an address is here, either way.
+      </small>
+    {{end}}
+
+    <button type="submit">Save</button>
+  </form>
+</section>
+
+<div class="amici-columns">
+  <section class="amici-card">
+    <h2>Your page</h2>
+    <p>
+      Your profile is yours to write. HTML, CSS, a marquee if the mood takes
+      you.
+    </p>
+    <p class="amici-btn-row">
+      <a href="/settings/canvas" role="button">Edit your page</a>
+      <a href="/u/{{.Viewer.Handle}}" role="button" class="secondary outline">See it</a>
+    </p>
+  </section>
+
+  <section class="amici-card">
+    <h2>Password</h2>
+    <form method="post" action="/settings/password">
+      {{template "csrf" .CSRF}}
+      <label for="current_password">Your current password</label>
+      <input type="password" id="current_password" name="current_password"
+        autocomplete="current-password" required>
+      <label for="new_password">A new one</label>
+      <input type="password" id="new_password" name="new_password"
+        autocomplete="new-password" minlength="{{.Data.PasswordMin}}" required>
+      <small>
+        At least {{.Data.PasswordMin}} characters. Changing it signs out every
+        other browser and phone.
+      </small>
+      <button type="submit">Change my password</button>
+    </form>
+  </section>
+</div>
+
+<section class="amici-card amici-card--quiet">
+  <h2>Signed in elsewhere</h2>
+  <p>
+    Used a shared computer, or lost a phone? This closes every session on your
+    account, including this one.
+  </p>
+  <form method="post" action="/settings/sessions/revoke">
+    {{template "csrf" .CSRF}}
+    <button type="submit" class="secondary">Sign out everywhere</button>
+  </form>
+</section>
+
+<section class="amici-card amici-card--quiet">
+  <h2>Your account</h2>
+  <ul>
+    <li>Handle: <strong>@{{.Viewer.Handle}}</strong>, which cannot be changed.</li>
+    <li>Email address: <strong>{{.Viewer.Email}}</strong></li>
+    <li>Kind of account: <strong>{{.Viewer.Role.Label}}</strong></li>
+    <li>Here since {{niceDate .Viewer.CreatedAt}}</li>
+  </ul>
+</section>
+
+{{if .Privileged}}
+  <section class="amici-card">
+    <h2>What you have done with your extra access</h2>
+    <p class="amici-meta">
+      Your account can act on other people's accounts, so every time it does,
+      it is written down. This is your own record, and support and developers
+      can see theirs.
+    </p>
+    {{if .Data.AuditTrail}}
+      <table class="amici-audit">
+        <thead><tr><th>When</th><th>Action</th><th>Subject</th><th>Note</th></tr></thead>
+        <tbody>
+          {{range .Data.AuditTrail}}
+            <tr>
+              <td>{{niceTime .CreatedAt}}</td>
+              <td>{{.Action}}</td>
+              <td>{{.SubjectID}}</td>
+              <td>{{.Detail}}</td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    {{else}}
+      <p>Nothing yet.</p>
+    {{end}}
+  </section>
+{{end}}
+
+{{template "foot" .}}

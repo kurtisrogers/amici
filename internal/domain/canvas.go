@@ -30,6 +30,12 @@ type Canvas struct {
 	SanitiserVersion int
 	// Notices are human-readable descriptions of what the sanitiser removed,
 	// shown to the member after saving so the rules are never a mystery.
+	//
+	// They belong to one save and are not stored. A canvas read back from the
+	// database always has none, which is deliberate: notices are an
+	// explanation of something that just happened, and showing somebody a
+	// list of complaints about markup they fixed a month ago would be worse
+	// than saying nothing.
 	Notices   []string
 	UpdatedAt time.Time
 }

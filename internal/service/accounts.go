@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/kurtisrogers/amici/internal/brand"
 	"github.com/kurtisrogers/amici/internal/domain"
@@ -382,6 +383,11 @@ func (a *Accounts) ChangePassword(ctx context.Context, actor *domain.Account, cu
 func (a *Accounts) ReopenSession(ctx context.Context, accountID domain.ID, userAgent string) (string, error) {
 	return a.openSession(ctx, accountID, userAgent)
 }
+
+// Now exposes the injected clock, so the web layer asks the same clock the
+// rules use rather than reading the wall clock directly. Without this, a test
+// that freezes time would still see live timestamps in a rendered page.
+func (a *Accounts) Now() time.Time { return a.deps.Clock.Now() }
 
 // Reload fetches a fresh copy of an account.
 func (a *Accounts) Reload(ctx context.Context, id domain.ID) (*domain.Account, error) {

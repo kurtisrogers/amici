@@ -1,0 +1,230 @@
+{{/*
+  The shared furniture. Every page opens with "head" and closes with "foot",
+  and the pieces in between are the things that appear on more than one screen.
+
+  Two rules hold everywhere in this directory:
+
+    1. No inline style attributes and no inline script. Amici's Content
+       Security Policy is "style-src 'self'; script-src 'self'" with no
+       unsafe-inline, so an inline style would simply not render and an inline
+       script would not run. Anything that looks like it needs one wants a
+       class in amici.css or a data attribute instead.
+
+    2. Nothing here calls a helper that returns template.HTML. Member-written
+       text is escaped by the template on every path. The only exceptions in
+       the whole application are canvasHTML and canvasCSS in canvas_frame.html,
+       which receive sanitised markup and land in a document that cannot run
+       script.
+*/}}
+
+{{define "head"}}<!doctype html>
+<html lang="en" data-colourway="{{.Colourway.Slug}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{{/* The X-Robots-Tag header on every response is the real instruction; this
+     is the belt to its braces, for the crawlers that only read markup. */}}
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>{{.Title}} &middot; {{.Brand.Name}}</title>
+<link rel="stylesheet" href="/static/pico.min.css">
+<link rel="stylesheet" href="/static/amici.css">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="amici-skip" href="#amici-main">Skip to content</a>
+<div class="amici-shell">
+<header class="amici-header">
+  <a class="amici-wordmark" href="{{if .Viewer}}/feed{{else}}/{{end}}">{{.Brand.Name}}</a>
+  <p class="amici-tagline">{{.Brand.Tagline}}</p>
+  <nav class="amici-nav" aria-label="Amici">
+    {{if .Viewer}}
+      <a href="/feed" {{if eq .Nav "feed"}}aria-current="page"{{end}}>Friends' posts</a>
+      <a href="/friends" {{if eq .Nav "friends"}}aria-current="page"{{end}}>Friends</a>
+      <a href="/u/{{.Viewer.Handle}}">Your page</a>
+      <a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>Settings</a>
+      {{if .ShowSupportConsole}}
+        <a href="/support" {{if eq .Nav "support"}}aria-current="page"{{end}}>Support</a>
+      {{end}}
+      {{if .ShowDeveloperConsole}}
+        <a href="/developer" {{if eq .Nav "developer"}}aria-current="page"{{end}}>Developer</a>
+      {{end}}
+      <form method="post" action="/signout" class="amici-inline-form">
+        {{template "csrf" .CSRF}}
+        <button type="submit" class="amici-nav__signout">Sign out</button>
+      </form>
+    {{else}}
+      <a href="/about" {{if eq .Nav "about"}}aria-current="page"{{end}}>About</a>
+      <a href="/signin">Sign in</a>
+      <a href="/signup" role="button" class="amici-btn-small">Join</a>
+    {{end}}
+  </nav>
+</header>
+<main id="amici-main">
+{{with .Flash}}{{template "flash" .}}{{end}}
+{{end}}
+
+{{define "foot"}}
+</main>
+<footer class="amici-footer">
+  <ul>
+    <li><a href="/about">What Amici is</a></li>
+    <li><a href="/.well-known/security.txt">Security</a></li>
+    <li><a href="/robots.txt">Crawlers, no thank you</a></li>
+  </ul>
+  <p>{{.Brand.Promise}}</p>
+</footer>
+</div>
+</body>
+</html>
+{{end}}
+
+{{/* csrf takes the token string, not the page, so that it is obvious at every
+     call site that a form is protected. A form without this line will be
+     rejected by the middleware rather than quietly working. */}}
+{{define "csrf"}}<input type="hidden" name="csrf_token" value="{{.}}">{{end}}
+
+{{define "flash"}}
+<div class="amici-flash amici-flash--{{.Kind}}" role="status">
+  <p>{{.Message}}</p>
+  {{with .Details}}
+    <ul>{{range .}}<li>{{.}}</li>{{end}}</ul>
+  {{end}}
+</div>
+{{end}}
+
+{{/* An avatar is initials on a colour, never an uploaded image. A photo of a
+     child's face is the single most sensitive thing a social network can
+     hold, and the safest way to hold it is not to. */}}
+{{define "avatar"}}<a class="amici-avatar" data-colourway="{{.Colourway}}" href="/u/{{.Handle}}"><span aria-hidden="true">{{.Initials}}</span><span class="amici-sr">{{.DisplayName}}</span></a>{{end}}
+
+{{define "avatarSmall"}}<a class="amici-avatar amici-avatar--sm" data-colourway="{{.Colourway}}" href="/u/{{.Handle}}"><span aria-hidden="true">{{.Initials}}</span><span class="amici-sr">{{.DisplayName}}</span></a>{{end}}
+
+{{/* post takes an itemView, built by the "item" helper. */}}
+{{define "post"}}
+{{$i := .Item}}
+<article class="amici-card amici-post" id="post-{{$i.Post.ID}}">
+  <header class="amici-post__head">
+    {{template "avatar" $i.Author}}
+    <div class="amici-post__who">
+      <a href="/u/{{$i.Author.Handle}}">{{$i.Author.DisplayName}}</a>
+      <span class="amici-meta">
+        <a href="/posts/{{$i.Post.ID}}">{{timeAgo $i.Post.CreatedAt}}</a>
+        {{if $i.Post.EditedAt}} &middot; edited{{end}}
+        {{if $i.Post.Visibility.Private}}
+          &middot; <span class="amici-visibility">{{$i.Post.Visibility.Label}}</span>
+        {{end}}
+      </span>
+    </div>
+  </header>
+
+  <div class="amici-post__body">
+    {{range paragraphs $i.Post.Body}}<p>{{.}}</p>{{end}}
+  </div>
+
+  <div class="amici-reactions">
+    {{range reactionKinds}}
+      {{$t := $i.TallyFor .}}
+      <form method="post" action="/posts/{{$i.Post.ID}}/react" class="amici-inline-form">
+        {{template "csrf" $.CSRF}}
+        <input type="hidden" name="kind" value="{{.}}">
+        <input type="hidden" name="return_to" value="{{$.ReturnTo}}">
+        <button type="submit" class="amici-react" aria-pressed="{{if $t.Mine}}true{{else}}false{{end}}">
+          <span aria-hidden="true">{{.Emoji}}</span>
+          <span class="amici-sr">{{.Label}}</span>
+          {{if $t.Count}}<span class="amici-react__count">{{$t.Count}}</span>{{end}}
+        </button>
+      </form>
+    {{end}}
+
+    {{if .Mine}}
+      <form method="post" action="/posts/{{$i.Post.ID}}/delete" class="amici-inline-form amici-reactions__own">
+        {{template "csrf" $.CSRF}}
+        <input type="hidden" name="return_to" value="{{$.ReturnTo}}">
+        <button type="submit" class="amici-btn-small secondary outline">Delete</button>
+      </form>
+    {{else}}
+      <details class="amici-report">
+        <summary>Report</summary>
+        <form method="post" action="/report">
+          {{template "csrf" $.CSRF}}
+          <input type="hidden" name="subject_kind" value="post">
+          <input type="hidden" name="subject_id" value="{{$i.Post.ID}}">
+          <input type="hidden" name="return_to" value="{{$.ReturnTo}}">
+          <label for="reason-{{$i.Post.ID}}">What is wrong with this post?</label>
+          <textarea id="reason-{{$i.Post.ID}}" name="reason" rows="3" required
+            placeholder="Tell us what you saw. Support cannot read your posts, so what you write here is all they will have."></textarea>
+          <button type="submit" class="amici-btn-small">Send to support</button>
+        </form>
+      </details>
+    {{end}}
+  </div>
+
+  {{if or $i.Comments $.Expanded}}
+    <div class="amici-comments">
+      {{range $i.Comments}}
+        <div class="amici-comment" id="comment-{{.Comment.ID}}">
+          {{template "avatarSmall" .Author}}
+          <div class="amici-comment__body">
+            <span class="amici-comment__author">{{.Author.DisplayName}}</span>
+            <span class="amici-meta">{{timeAgo .Comment.CreatedAt}}</span>
+            {{range paragraphs .Comment.Body}}<p>{{.}}</p>{{end}}
+          </div>
+          {{if $.CanDelete .}}
+            <form method="post" action="/comments/{{.Comment.ID}}/delete" class="amici-inline-form">
+              {{template "csrf" $.CSRF}}
+              <input type="hidden" name="return_to" value="{{$.ReturnTo}}">
+              <button type="submit" class="amici-btn-small secondary outline">Remove</button>
+            </form>
+          {{end}}
+        </div>
+      {{end}}
+
+      {{if and (not $.Expanded) $i.MoreComments}}
+        <p class="amici-meta">
+          <a href="/posts/{{$i.Post.ID}}">Read
+            {{if $i.Comments}}the other {{end}}{{$i.MoreComments}}
+            {{pluralise $i.MoreComments "reply" "replies"}}</a>
+        </p>
+      {{end}}
+
+      {{if $.Expanded}}
+        <form method="post" action="/posts/{{$i.Post.ID}}/comments">
+          {{template "csrf" $.CSRF}}
+          <input type="hidden" name="return_to" value="{{$.ReturnTo}}">
+          <label for="comment-body-{{$i.Post.ID}}" class="amici-sr">Say something</label>
+          <textarea id="comment-body-{{$i.Post.ID}}" name="body" rows="2" required
+            placeholder="Say something kind"></textarea>
+          <button type="submit" class="amici-btn-small">Reply</button>
+        </form>
+      {{end}}
+    </div>
+  {{else if $i.CommentCount}}
+    <p class="amici-meta">
+      <a href="/posts/{{$i.Post.ID}}">{{$i.CommentCount}}
+        {{pluralise $i.CommentCount "reply" "replies"}}</a>
+    </p>
+  {{else}}
+    <p class="amici-meta"><a href="/posts/{{$i.Post.ID}}">Reply</a></p>
+  {{end}}
+</article>
+{{end}}
+
+{{/* composer is the write-a-post box. It takes the page, because it needs the
+     CSRF token and the list of visibilities. */}}
+{{define "composer"}}
+<form method="post" action="/posts" class="amici-card amici-composer">
+  {{template "csrf" .CSRF}}
+  <label for="post-body" class="amici-sr">What would you like to say?</label>
+  <textarea id="post-body" name="body" rows="3" required
+    placeholder="What would you like to tell your friends, {{.Viewer.DisplayName}}?"></textarea>
+  <div class="amici-btn-row">
+    <label for="post-visibility" class="amici-sr">Who can see this</label>
+    <select id="post-visibility" name="visibility" class="amici-select-inline">
+      {{range visibilities}}<option value="{{.}}">{{.Label}}</option>{{end}}
+    </select>
+    <button type="submit">Post</button>
+  </div>
+</form>
+{{end}}

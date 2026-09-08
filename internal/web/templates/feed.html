@@ -1,0 +1,52 @@
+{{template "head" .}}
+
+{{if .Data.PendingRequests}}
+  <div class="amici-card amici-card--accent">
+    <p>
+      <strong>{{.Data.PendingRequests}}
+        {{pluralise .Data.PendingRequests "person is" "people are"}}
+        waiting to hear back from you.</strong>
+      <a href="/friends">Have a look</a>
+    </p>
+  </div>
+{{end}}
+
+{{template "composer" .}}
+
+{{if .Data.Page.Items}}
+  {{range .Data.Page.Items}}
+    {{template "post" (item $ . "/feed" false)}}
+  {{end}}
+
+  {{with .Data.Page.NextCursor}}
+    <p class="amici-btn-row">
+      <a href="/feed?before={{.}}" role="button" class="secondary outline">Older posts</a>
+    </p>
+  {{end}}
+
+{{else if .Data.FriendCount}}
+  <div class="amici-card amici-empty">
+    <h2>All quiet</h2>
+    <p>
+      Nobody has posted yet. You could go first: your
+      {{.Data.FriendCount}} {{pluralise .Data.FriendCount "friend" "friends"}}
+      would probably like to hear from you.
+    </p>
+  </div>
+
+{{else}}
+  <div class="amici-card amici-empty">
+    <h2>It is just you in here so far</h2>
+    <p>
+      {{.Brand.Name}} has no way to suggest people to you, which is the point.
+      To get started, send a request to an email address you already have, or
+      give somebody a request code.
+    </p>
+    <p class="amici-btn-row amici-btn-row--centred">
+      <a href="/friends" role="button">Bring somebody in</a>
+      <a href="/settings/canvas" role="button" class="secondary outline">Decorate your page</a>
+    </p>
+  </div>
+{{end}}
+
+{{template "foot" .}}

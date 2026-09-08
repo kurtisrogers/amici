@@ -1,0 +1,212 @@
+{{template "head" .}}
+{{$o := .Data.Overview}}
+
+<h1>Friends</h1>
+<p class="amici-lede">
+  Two ways in, and no others: an email address you already know, or a code
+  somebody handed you. There is nothing to search and nobody to browse.
+</p>
+
+{{/* The freshly minted code, shown once. It is stored only as a hash, so this
+     is genuinely the last time anybody can read it. */}}
+{{with .Data.Minted}}
+  <section class="amici-card amici-card--accent">
+    <h2>Here is your code</h2>
+    <code class="amici-code">{{.Code}}</code>
+    <p>
+      Give it to one person, however you like: a text message, a note, out loud
+      across the kitchen. It works <strong>once</strong> and stops working
+      {{if .ExpiresIn}}in {{duration .ExpiresIn}}{{else}}shortly{{end}}, at
+      {{niceTime .Invite.ExpiresAt}}.
+    </p>
+    <p>
+      Or send them this link:
+      <br><code class="amici-code amici-code--link">{{.Link}}</code>
+    </p>
+    <p class="amici-meta">
+      Copy it now. We keep only a hash of it, so nobody at {{$.Brand.Name}} can
+      show it to you again, including us.
+    </p>
+  </section>
+{{end}}
+
+<div class="amici-columns">
+  <section class="amici-card">
+    <h2>Send a request to an email address</h2>
+    <form method="post" action="/friends/request">
+      {{template "csrf" .CSRF}}
+      <label for="request-email">Their email address</label>
+      <input type="email" id="request-email" name="email" required autocomplete="off">
+      <label for="request-note">A line so they know it is you</label>
+      <input type="text" id="request-note" name="note" maxlength="{{.Data.MaxNoteLength}}"
+        placeholder="It's Marco from the choir">
+      <button type="submit">Send the request</button>
+    </form>
+    <p class="amici-meta">
+      We answer the same way whatever happens, even if that address has no
+      account. Being able to test whether somebody is here is exactly what we
+      are trying to make impossible.
+    </p>
+  </section>
+
+  <section class="amici-card">
+    <h2>Hand out a code</h2>
+    <form method="post" action="/friends/invites">
+      {{template "csrf" .CSRF}}
+      <label for="invite-label">Who is it for? (only you see this)</label>
+      <input type="text" id="invite-label" name="label" maxlength="60" placeholder="Nonna">
+      <button type="submit">Make a code</button>
+    </form>
+    <p class="amici-meta">
+      Codes last {{duration (.Viewer.InviteTTLFor .Now)}} and work once.
+    </p>
+    <p><a href="/friends/redeem">Somebody gave you a code?</a></p>
+  </section>
+</div>
+
+{{with $o.Incoming}}
+  <section class="amici-card">
+    <h2>Waiting for you</h2>
+    <ul class="amici-people">
+      {{range .}}
+        <li class="amici-person">
+          {{template "avatar" .Person}}
+          <div>
+            <span class="amici-person__name">{{.Person.DisplayName}}</span>
+            <br><span class="amici-meta">
+              @{{.Person.Handle}} &middot; {{timeAgo .Request.CreatedAt}}
+              {{if eq .Request.Origin "invite"}}&middot; used your code{{end}}
+            </span>
+            {{with .Request.Note}}<br><span class="amici-quote">&ldquo;{{.}}&rdquo;</span>{{end}}
+          </div>
+          <div class="amici-person__actions">
+            <form method="post" action="/friends/requests/{{.Request.ID}}/accept" class="amici-inline-form">
+              {{template "csrf" $.CSRF}}
+              <button type="submit" class="amici-btn-small">Accept</button>
+            </form>
+            <form method="post" action="/friends/requests/{{.Request.ID}}/decline" class="amici-inline-form">
+              {{template "csrf" $.CSRF}}
+              <button type="submit" class="amici-btn-small secondary outline">No thanks</button>
+            </form>
+          </div>
+        </li>
+      {{end}}
+    </ul>
+    <p class="amici-meta">
+      Turning somebody down tells them nothing. They are not notified and they
+      cannot see anything of yours either way.
+    </p>
+  </section>
+{{end}}
+
+<section class="amici-card">
+  <h2>Your friends {{if $o.Friends}}<span class="amici-meta">({{len $o.Friends}})</span>{{end}}</h2>
+  {{if $o.Friends}}
+    <ul class="amici-people">
+      {{range $o.Friends}}
+        <li class="amici-person">
+          {{template "avatar" .}}
+          <div>
+            <span class="amici-person__name"><a href="/u/{{.Handle}}">{{.DisplayName}}</a></span>
+            <br><span class="amici-meta">@{{.Handle}}</span>
+          </div>
+          <div class="amici-person__actions">
+            <form method="post" action="/friends/{{.ID}}/unfriend" class="amici-inline-form">
+              {{template "csrf" $.CSRF}}
+              <button type="submit" class="amici-btn-small secondary outline">Unfriend</button>
+            </form>
+            <form method="post" action="/friends/{{.ID}}/block" class="amici-inline-form">
+              {{template "csrf" $.CSRF}}
+              <button type="submit" class="amici-btn-small secondary outline">Block</button>
+            </form>
+          </div>
+        </li>
+      {{end}}
+    </ul>
+    <p class="amici-meta">
+      Your friend list is yours. No friend of yours can see it, and neither can
+      support or developers.
+    </p>
+  {{else}}
+    <p>
+      Nobody yet. Nothing on {{.Brand.Name}} will suggest anyone to you, so the
+      first move is always yours.
+    </p>
+  {{end}}
+</section>
+
+{{with $o.Outgoing}}
+  <section class="amici-card">
+    <h2>Sent, and waiting</h2>
+    <ul class="amici-invite-list">
+      {{range .}}
+        <li class="amici-invite">
+          <span>{{.Person.DisplayName}} <span class="amici-meta">@{{.Person.Handle}}</span></span>
+          <span class="amici-meta">{{timeAgo .Request.CreatedAt}}</span>
+          <form method="post" action="/friends/requests/{{.Request.ID}}/cancel" class="amici-inline-form">
+            {{template "csrf" $.CSRF}}
+            <button type="submit" class="amici-btn-small secondary outline">Withdraw</button>
+          </form>
+        </li>
+      {{end}}
+    </ul>
+  </section>
+{{end}}
+
+{{with $o.Invites}}
+  <section class="amici-card">
+    <h2>Codes you have made</h2>
+    <ul class="amici-invite-list">
+      {{range .}}
+        <li class="amici-invite">
+          {{$state := .State $o.Now}}
+          <span class="amici-state amici-state--{{$state}}">{{$state}}</span>
+          <span>{{if .Label}}{{.Label}}{{else}}<span class="amici-meta">no label</span>{{end}}</span>
+          <span class="amici-meta">
+            made {{timeAgo .CreatedAt}}
+            {{if .RedeemedAt}}&middot; used {{timeAgo .RedeemedAt}}
+            {{else}}&middot; expires {{niceTime .ExpiresAt}}{{end}}
+          </span>
+          {{if .Usable $o.Now}}
+            <form method="post" action="/friends/invites/{{.ID}}/revoke" class="amici-inline-form">
+              {{template "csrf" $.CSRF}}
+              <button type="submit" class="amici-btn-small secondary outline">Revoke</button>
+            </form>
+          {{end}}
+        </li>
+      {{end}}
+    </ul>
+    <p class="amici-meta">
+      The codes themselves are not shown, because we only kept a hash of them.
+      Revoking one stops it working immediately.
+    </p>
+  </section>
+{{end}}
+
+{{with $o.Blocked}}
+  <section class="amici-card amici-card--quiet">
+    <h2>Blocked</h2>
+    <ul class="amici-people">
+      {{range .}}
+        <li class="amici-person">
+          <div>
+            <span class="amici-person__name">{{.DisplayName}}</span>
+            <br><span class="amici-meta">@{{.Handle}}</span>
+          </div>
+          <div class="amici-person__actions">
+            <form method="post" action="/friends/{{.ID}}/unblock" class="amici-inline-form">
+              {{template "csrf" $.CSRF}}
+              <button type="submit" class="amici-btn-small secondary outline">Unblock</button>
+            </form>
+          </div>
+        </li>
+      {{end}}
+    </ul>
+    <p class="amici-meta">
+      A blocked person cannot reach you by email address or by code, and
+      unblocking does not make you friends again.
+    </p>
+  </section>
+{{end}}
+
+{{template "foot" .}}

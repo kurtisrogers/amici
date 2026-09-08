@@ -1,0 +1,95 @@
+{{template "head" .}}
+{{$p := .Data.Profile}}
+
+<header class="amici-card amici-profile">
+  <span class="amici-avatar amici-avatar--lg" data-colourway="{{$p.Card.Colourway}}" aria-hidden="true">{{$p.Card.Initials}}</span>
+  <div class="amici-profile__who">
+    <h1>{{$p.Account.DisplayName}}</h1>
+    <p class="amici-meta">
+      @{{$p.Account.Handle}}
+      {{if ne $p.Account.Role "member"}}<span class="amici-role">{{$p.Account.Role.Label}}</span>{{end}}
+      &middot; here since {{niceDate $p.MemberSince}}
+      &middot; {{$p.FriendCount}} {{pluralise $p.FriendCount "friend" "friends"}}
+      &middot; {{$p.PostCount}} {{pluralise $p.PostCount "post" "posts"}}
+    </p>
+    {{with $p.Account.Bio}}<p class="amici-profile__bio">{{.}}</p>{{end}}
+  </div>
+  <div class="amici-profile__actions">
+    {{if $p.IsSelf}}
+      <a href="/settings/canvas" role="button" class="amici-btn-small">Edit your page</a>
+      <a href="/settings" role="button" class="amici-btn-small secondary outline">Settings</a>
+    {{else}}
+      <details class="amici-report">
+        <summary>Report</summary>
+        <form method="post" action="/report">
+          {{template "csrf" .CSRF}}
+          <input type="hidden" name="subject_kind" value="account">
+          <input type="hidden" name="subject_id" value="{{$p.Account.ID}}">
+          <input type="hidden" name="return_to" value="/u/{{$p.Account.Handle}}">
+          <label for="report-reason">What is the problem?</label>
+          <textarea id="report-reason" name="reason" rows="3" required
+            placeholder="Support cannot see this page or these posts, so please describe what you are reporting."></textarea>
+          <button type="submit" class="amici-btn-small">Send to support</button>
+        </form>
+      </details>
+    {{end}}
+  </div>
+</header>
+
+{{/*
+  The member's own markup, in its own document.
+
+  The sandbox attribute is the browser-level half of the canvas defence and the
+  Content-Security-Policy served with the frame is the other half. Neither
+  grants allow-scripts or allow-same-origin, so the document inside cannot run
+  code and cannot reach this page's cookies, storage or DOM even if the
+  sanitiser were one day wrong about something.
+*/}}
+{{if .Data.CanvasSrc}}
+  <iframe class="amici-canvas-frame" src="{{.Data.CanvasSrc}}"
+    title="{{$p.Account.DisplayName}}'s profile page"
+    sandbox="allow-popups allow-popups-to-escape-sandbox"
+    referrerpolicy="no-referrer" loading="lazy"></iframe>
+  <p class="amici-canvas-note">
+    Above is {{if $p.IsSelf}}your{{else}}{{$p.Account.DisplayName}}'s{{end}}
+    own markup, kept in a sandbox so it cannot run anything or reach the rest
+    of {{.Brand.Name}}.
+  </p>
+{{else if $p.IsSelf}}
+  <div class="amici-card amici-card--quiet">
+    <p>
+      Your page is plain at the moment.
+      <a href="/settings/canvas">Write some HTML</a> and make it yours: fonts,
+      colours, a marquee, whatever you like.
+    </p>
+  </div>
+{{end}}
+
+{{if $p.IsSelf}}{{template "composer" .}}{{end}}
+
+<h2>{{if $p.IsSelf}}Your posts{{else}}Posts{{end}}</h2>
+
+{{if $p.Posts.Items}}
+  {{range $p.Posts.Items}}
+    {{template "post" (item $ . (printf "/u/%s" $p.Account.Handle) false)}}
+  {{end}}
+  {{with $p.Posts.NextCursor}}
+    <p class="amici-meta">
+      Older posts from {{$p.Account.DisplayName}} appear in
+      <a href="/feed">your friends' posts</a>.
+    </p>
+  {{end}}
+{{else}}
+  <div class="amici-card amici-empty">
+    <p>
+      {{if $p.IsSelf}}
+        You have not posted anything yet.
+      {{else}}
+        Nothing here yet. When {{$p.Account.DisplayName}} posts, it will show
+        up for their friends.
+      {{end}}
+    </p>
+  </div>
+{{end}}
+
+{{template "foot" .}}

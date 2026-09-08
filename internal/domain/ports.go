@@ -147,6 +147,16 @@ type Store interface {
 	Close() error
 }
 
+// Resettable is an optional capability a store may offer: wiping every row.
+//
+// It is deliberately not part of Store. Store is what the services depend on,
+// and no business rule should ever be one type assertion away from being able
+// to delete everything. A store that supports being reset advertises it
+// separately, and only the fixtures loader asks for it.
+type Resettable interface {
+	TruncateAll(ctx context.Context) error
+}
+
 // Clock is injected wherever time affects a rule, so tests can prove that a
 // twenty-four hour expiry really does expire.
 type Clock interface {

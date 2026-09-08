@@ -1,0 +1,126 @@
+{{template "head" .}}
+
+<h1>About {{.Brand.Name}}</h1>
+<p class="amici-lede">{{.Brand.Tagline}}.</p>
+
+<section class="amici-card">
+  <h2>What this is</h2>
+  <p>
+    {{.Brand.Name}} is Latin and Italian for "friends", which is the whole
+    specification. It is a place to tell the people you actually know what you
+    have been up to, and to hear the same back from them. That is the entire
+    feature list, and we are quite deliberate about keeping it that way.
+  </p>
+</section>
+
+<section class="amici-card">
+  <h2>How people find each other</h2>
+  <p>There are exactly two ways, and there will not be a third.</p>
+  <ol>
+    <li>
+      <strong>You already know their email address.</strong> Send a request to
+      it. We will never tell you whether that address belongs to an account
+      here, because being able to check is itself the thing we are preventing.
+    </li>
+    <li>
+      <strong>They gave you a request code.</strong> A member generates a code
+      and passes it on however they like. It works once and stops working
+      after twenty four hours, or four hours if they are under eighteen.
+    </li>
+  </ol>
+  <p>
+    There is no search box. There is no suggestion engine. There is no
+    "friends of friends", no contact upload, no phone number matching and no
+    profile link you can post publicly. Every one of those is a way for a
+    stranger to arrive, so none of them exists.
+  </p>
+</section>
+
+<section class="amici-card">
+  <h2>Who can see your posts</h2>
+  <p>
+    Confirmed friends, or nobody but you. Those are the only two audiences
+    {{.Brand.Name}} can express. There is no public post, no unlisted post and
+    no link that lets somebody outside see in.
+  </p>
+  <p>
+    Your friend list is yours alone. Nobody, friend or not, can browse it, and
+    neither support nor developers can read it.
+  </p>
+</section>
+
+<section class="amici-card">
+  <h2>Looking after younger members</h2>
+  <p>
+    You must be at least thirteen to join. Members under eighteen cannot be
+    reached by anybody who merely knows their email address, whatever their
+    settings say: a code they chose to hand over is the only route to them, and
+    their codes expire in four hours rather than twenty four.
+  </p>
+  <p>
+    Nobody can find them, nobody can suggest them to a stranger, and no
+    stranger can see anything they post. There are no profile photographs
+    anywhere on {{.Brand.Name}}, for anybody.
+  </p>
+</section>
+
+<section class="amici-card">
+  <h2>Your profile page</h2>
+  <p>
+    You can write the HTML and CSS of your own profile, the way the web worked
+    before every page looked the same. Fonts, colours, marquees, blinking text,
+    a wonky table layout if that is what you want.
+  </p>
+  <p>
+    Everything you write goes through a sanitiser that keeps decoration and
+    removes anything that could run, phone home or dress itself up as
+    {{.Brand.Name}} asking for your password. Your page is then displayed
+    inside a sandbox that cannot run script even if something slipped through.
+    We would rather explain why we removed something than let one clever
+    profile read a visitor's account.
+  </p>
+</section>
+
+<section class="amici-card">
+  <h2>Accounts with extra powers</h2>
+  <p>Three kinds of account exist, and the limits matter more than the powers.</p>
+  <ul>
+    <li>
+      <strong>Members.</strong> People. Almost every account.
+    </li>
+    <li>
+      <strong>Support.</strong> Can find an account from an email address to
+      help somebody back in, can suspend an account, can act on reports, and
+      can switch a profile's customisation back to plain. Cannot read posts,
+      comments, friend lists or anybody's markup.
+    </li>
+    <li>
+      <strong>Developers.</strong> Can see whether the service is healthy and
+      what the schema is doing. Cannot read member content either.
+    </li>
+  </ul>
+  <p>
+    Every privileged action is written to an audit record with the name of the
+    person who took it, and they can see that record on their own settings
+    page. Power that leaves a trail is power people use carefully.
+  </p>
+</section>
+
+<section class="amici-card">
+  <h2>Money</h2>
+  <p>
+    There are no adverts, so nothing about you needs to be measured, packaged
+    or sold. The intention is to cover the cost of running the thing and stop
+    there. An {{.Brand.Name}} that needed to grow would start making the
+    decisions that ruined everything else.
+  </p>
+</section>
+
+{{if not .Viewer}}
+<p class="amici-btn-row">
+  <a href="/signup" role="button">Join {{.Brand.Name}}</a>
+  <a href="/signin" role="button" class="secondary outline">Sign in</a>
+</p>
+{{end}}
+
+{{template "foot" .}}
