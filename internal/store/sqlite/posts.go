@@ -105,9 +105,16 @@ func (s *Store) FeedForAudience(
 	args := idArgs(authorIDs)
 	// only_me posts belong to their author alone, so they are filtered here
 	// rather than trusting the caller to have thought about it.
+	//
+	// The status check is here for the same reason. A suspension has to take
+	// somebody's posts out of their friends' feeds immediately, and putting
+	// that condition in the query means every caller gets it rather than
+	// every caller having to remember it. It costs an indexed primary key
+	// lookup per candidate row.
 	where := []string{
 		`author_id IN (` + placeholders(len(authorIDs)) + `)`,
 		`(visibility = 'friends' OR author_id = ?)`,
+		`EXISTS (SELECT 1 FROM accounts WHERE accounts.id = posts.author_id AND accounts.status = 'active')`,
 	}
 	args = append(args, string(viewerID))
 
