@@ -111,6 +111,11 @@ type CanvasRepo interface {
 	SaveCanvas(ctx context.Context, c *Canvas) error
 	CanvasForAccount(ctx context.Context, accountID ID) (*Canvas, error)
 	DeleteCanvas(ctx context.Context, accountID ID) error
+	// CanvasesBelowVersion finds canvases whose stored rendering predates the
+	// given sanitiser version. This is what makes tightening the sanitiser
+	// safe: the member's source is kept, so stricter rules can be replayed
+	// over every stored canvas rather than leaving old output serving forever.
+	CanvasesBelowVersion(ctx context.Context, version int, limit int) ([]ID, error)
 }
 
 // AuditRepo persists the audit trail.
