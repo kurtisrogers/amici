@@ -128,7 +128,7 @@ func hotp(key []byte, counter uint64) string {
 // either shipping an encoder and rendering an image, or asking a third party
 // to draw it, and the second of those would hand somebody else a shared
 // secret. Typing a secret once is a fair price for not doing that, and a
-// server-side encoder is on the roadmap.
+// server-side encoder is queued in docs/roadmap.md.
 func TOTPURI(secret, issuer, account string) string {
 	label := url.PathEscape(issuer + ":" + account)
 	q := url.Values{}

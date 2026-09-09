@@ -101,8 +101,49 @@ navigation is built from the account loaded with the session.
 - Joining signs you straight in and lands you on the friends page rather than
   the feed, because a feed with nobody in it is not a useful first screen.
 
-Registration does not confirm the email address. That is the most significant
-gap in the system and `docs/security.md` explains what it means.
+Registration sends a confirmation link, and the address is unproved until
+somebody follows it. An unproved address cannot be used to reach the member
+and cannot receive a password reset, which is what stops registering with
+somebody else's address being a way to receive their friend requests.
+
+Nothing else is withheld. The member is signed in, can post, and can reach
+people with request codes; the only thing an unconfirmed address costs is
+being reachable by email. So the reminder is a banner rather than a wall, and
+somebody who never wants to be reachable that way can ignore it forever.
+
+## Changing the email address
+
+From settings, with the current password. The new address is stored as pending
+and the account keeps working on the old one until a link sent to the new one
+is followed. That ordering is the whole safety of the flow: a typo costs a
+wasted email rather than an account nobody can recover, and somebody who
+briefly gets hold of a session cannot take the account away by pointing it at
+an address they control.
+
+Whether the new address is already on another account is not reported to
+whoever asked, for the same reason registration has one message for every
+collision. The pending address is recorded and the confirmation is sent; the
+collision surfaces when the link is followed, to the person who by definition
+owns that mailbox.
+
+Completing a change invalidates any password reset links sent to the old
+address, so the previous owner of that mailbox does not keep a way in.
+
+## A second step when signing in
+
+Optional, off by default, and a code from an authenticator app rather than a
+text message. `docs/security.md` explains why there is no SMS option and how
+the enrolment and challenge flows are shaped. From a member's point of view:
+
+- Enrolling shows a secret to type into an app, then asks for a code to prove
+  the app is working. Nothing changes until that code is right.
+- Ten recovery codes are shown once, at enrolment, and never again. Any of
+  them gets you in without your phone, once each. A fresh set can be made from
+  settings, which invalidates the old one.
+- Turning it off needs the password, and takes the recovery codes with it.
+- Nobody at Amici can let a member past the second step, and the page says so.
+  Support being able to would mean anybody who could talk their way past
+  support could too.
 
 ## Age
 
@@ -124,12 +165,52 @@ itself a signal to anybody looking for one.
 - 30 days, extended on use.
 - One row per session, so a member can see how many browsers are signed in and
   revoke the others from settings.
-- Changing a password closes every other session.
+- Changing a password, resetting one, or closing an account closes every
+  session.
 - Expired sessions are purged by a housekeeping pass, and any session found
   expired during authentication is deleted there and then.
 
-## Deactivation
+There is no per-device list yet: the only control is "sign out everywhere",
+which is blunt but honest. A device list is queued in
+[docs/roadmap.md](roadmap.md).
 
-`StatusDeactivated` exists and is honoured everywhere `StatusSuspended` is,
-but there is no member-facing route to it yet. Closing your own account should
-be as easy as opening one, and that is a known gap rather than a decision.
+## Forgotten passwords
+
+A link sent to the confirmed address on the account, good for an hour and for
+one use. Setting a new password closes every session, including that of
+whoever asked for the reset — so if the reason for the reset was that somebody
+else had the password, they get nothing out of it.
+
+The form answers identically every time, whether the address belongs to
+nobody, to a suspended account, to a closed one, or to an account that never
+confirmed its address, and it says out loud that it is not telling you which.
+Somebody who typed a friend's address in to see what would happen learns
+nothing, and somebody whose own reset never arrives can at least understand
+why they are not being told.
+
+Support cannot do this for a member, and that is not unhelpfulness. If support
+could hand an account to whoever asked convincingly enough, so could anybody
+who learned to ask the same way.
+
+## Closing your own account
+
+From settings, with the password, and the page counts out what it costs before
+it happens: how many posts will leave your friends' feeds, how many friends
+you are connected to, and how long you have to change your mind. "Close my
+account" is an abstraction; a number is not, and nobody should discover
+afterwards what they agreed to.
+
+It takes effect at once — signed out everywhere, invisible to friends, invite
+codes dead — and deletes nothing for thirty days. Signing in inside that
+window brings everything back with no form to fill in and nobody to ask. After
+it, `PurgeClosedAccounts` deletes the rows for good. `docs/security.md`
+explains why the grace period is shaped that way.
+
+Support and developer accounts cannot be closed from settings. They hold power
+over other people's accounts, so they are moved back to `member` with
+`amiciadmin` first, by somebody who has to be at a terminal.
+
+`StatusDeactivated` is what a closed account is, and it is honoured everywhere
+`StatusSuspended` is: the feed query filters on author status, so closure is
+not merely a sign-in block. The difference between the two is who asked for it
+and whether it ends in deletion.
