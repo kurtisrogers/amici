@@ -44,6 +44,15 @@ type Person struct {
 	// ReachableByEmail is applied after registration, since registration
 	// derives it from age.
 	ReachableByEmail bool
+	// Unconfirmed leaves the address unproved, as it would be for somebody
+	// who registered and never followed the link.
+	//
+	// It is the exception rather than the default because a fixture world
+	// where nobody is reachable by email would make the friend request specs
+	// pass for the wrong reason: the request would go nowhere, and the test
+	// asserting that Amici never says whether an address is here would be
+	// satisfied by an application that had simply stopped working.
+	Unconfirmed bool
 	// Note explains what this account is for, printed by the seed command.
 	Note string
 }
@@ -95,6 +104,14 @@ var People = []Person{
 		Bio:              "Reachable by code only, thank you.",
 		ReachableByEmail: false,
 		Note:             "An adult who has switched off email requests. A request to marco@example.test must silently go nowhere.",
+	},
+	{
+		Handle: "nuovo", DisplayName: "Pia Nuova", Email: "pia@example.test",
+		Role: domain.RoleMember, Colourway: "limonata", AgeYears: 27,
+		Bio:              "Just arrived.",
+		ReachableByEmail: true,
+		Unconfirmed:      true,
+		Note:             "Registered and never followed the confirmation link. Sees the banner asking her to, cannot be reached at pia@example.test, and cannot reset her password.",
 	},
 	{
 		Handle: "help-desk", DisplayName: "Ines from Support", Email: "support@example.test",
@@ -254,6 +271,15 @@ func Load(ctx context.Context, store domain.Store, clock domain.Clock, secret []
 			ReachableByEmail: p.ReachableByEmail && p.AgeYears >= domain.AdultAgeYears,
 			CreatedAt:        now.Add(-time.Duration(p.AgeYears) * time.Hour),
 			UpdatedAt:        now,
+		}
+		if !p.Unconfirmed {
+			// The fixture cast's addresses do not exist, so nobody can follow
+			// a link to prove they can read one. Marking them confirmed here
+			// is the only honest option: the alternative is a development
+			// world in which no member can be reached by the route that most
+			// of Amici's rules are about.
+			confirmed := now.Add(-time.Hour)
+			acct.EmailConfirmedAt = &confirmed
 		}
 		if err := store.CreateAccount(ctx, acct); err != nil {
 			return nil, fmt.Errorf("fixtures: create %s: %w", p.Handle, err)

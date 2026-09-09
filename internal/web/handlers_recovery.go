@@ -29,7 +29,7 @@ func (s *Server) handleTwoFactorForm(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/feed", http.StatusSeeOther)
 		return
 	}
-	token := s.takeChallengeToken(r)
+	token := s.challengeToken(r)
 	if token == "" {
 		s.flashBad(w, "That sign-in has expired. Please start again.")
 		http.Redirect(w, r, "/signin", http.StatusSeeOther)
@@ -49,7 +49,7 @@ func (s *Server) handleTwoFactorForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTwoFactor(w http.ResponseWriter, r *http.Request) {
-	token := s.takeChallengeToken(r)
+	token := s.challengeToken(r)
 	if token == "" {
 		s.flashBad(w, "That sign-in has expired. Please start again.")
 		http.Redirect(w, r, "/signin", http.StatusSeeOther)

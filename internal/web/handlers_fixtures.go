@@ -35,6 +35,7 @@ type personInfo struct {
 	Email            string `json:"email"`
 	Role             string `json:"role"`
 	ReachableByEmail bool   `json:"reachable_by_email"`
+	EmailConfirmed   bool   `json:"email_confirmed"`
 	Note             string `json:"note"`
 }
 
@@ -136,6 +137,7 @@ func peopleInfo() []personInfo {
 			Email:            p.Email,
 			Role:             string(p.Role),
 			ReachableByEmail: p.ReachableByEmail,
+			EmailConfirmed:   !p.Unconfirmed,
 			Note:             p.Note,
 		})
 	}

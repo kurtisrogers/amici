@@ -82,10 +82,10 @@ func (s *Server) setChallengeCookie(w http.ResponseWriter, token string) {
 	s.setCookie(w, s.challengeCookieName(), token, int(domain.TwoFactorTTL.Seconds()), true)
 }
 
-// takeChallengeToken reads the challenge handle without clearing it, so a
-// member who mistypes a code can try again without going back to the password
-// form. The challenge itself counts the attempts.
-func (s *Server) takeChallengeToken(r *http.Request) string {
+// challengeToken reads the challenge handle without clearing it, so a member
+// who mistypes a code can try again without going back to the password form.
+// The challenge row counts the attempts, and closes itself when they run out.
+func (s *Server) challengeToken(r *http.Request) string {
 	for _, name := range []string{challengeCookieName, challengeCookieNameDev} {
 		if c, err := r.Cookie(name); err == nil && c.Value != "" {
 			return c.Value

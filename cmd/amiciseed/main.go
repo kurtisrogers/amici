@@ -69,7 +69,10 @@ func run() error {
 	fmt.Println("Who is who:")
 	for _, p := range fixtures.People {
 		reach := "codes only"
-		if p.ReachableByEmail {
+		switch {
+		case p.Unconfirmed:
+			reach = "unconfirmed"
+		case p.ReachableByEmail:
 			reach = "reachable by email"
 		}
 		fmt.Printf("  %-14s %-22s %-10s %-18s %s\n",

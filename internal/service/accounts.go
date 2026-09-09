@@ -161,6 +161,20 @@ func (a *Accounts) Register(ctx context.Context, in Registration) (*domain.Accou
 	return acct, nil
 }
 
+// errSignInFailed is the answer to a wrong password and to an address with no
+// account behind it alike.
+//
+// One sentence for both, for the same reason registration has one message for
+// every collision: a page that distinguished them would let anybody check
+// whether somebody they know is on Amici. It is worded as something a person
+// can act on, because "invalid credentials" tells a member who has mistyped
+// their password nothing they did not already know.
+var errSignInFailed = fmt.Errorf(
+	"%w: that email address and password do not go together. If you have forgotten your password, "+
+		"there is a link below to set a new one",
+	domain.ErrCredentials,
+)
+
 // Credentials is what the sign-in form collects.
 type Credentials struct {
 	Email     string
@@ -223,7 +237,7 @@ func (a *Accounts) SignIn(ctx context.Context, in Credentials) (*SignInResult, e
 			// to keep to itself.
 			security.BurnPasswordTime(in.Password)
 			failed()
-			return nil, domain.ErrCredentials
+			return nil, errSignInFailed
 		}
 		return nil, fmt.Errorf("look up account: %w", err)
 	}
@@ -234,7 +248,7 @@ func (a *Accounts) SignIn(ctx context.Context, in Credentials) (*SignInResult, e
 	}
 	if !ok {
 		failed()
-		return nil, domain.ErrCredentials
+		return nil, errSignInFailed
 	}
 
 	// The status check happens after the password check on purpose. Answering
