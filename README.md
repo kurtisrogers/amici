@@ -129,13 +129,16 @@ pull request. Both suites run on every pull request via GitHub Actions.
 | [docs/frontend.md](docs/frontend.md) | Templates, PicoCSS, and why there is no JavaScript |
 | [docs/development.md](docs/development.md) | Running it, the fixture cast, configuration, tests |
 | [docs/roadmap.md](docs/roadmap.md) | What is planned, and the longer list of what Amici refuses to build |
+| [docs/deployment.md](docs/deployment.md) | Cutting a release, and running one instance without losing anybody's data |
 
 ## Before running this for real
 
-Amici is a foundation, and honest about what is missing. The gaps are listed
-in full at the end of [docs/security.md](docs/security.md) and what is queued
-against them is in [docs/roadmap.md](docs/roadmap.md). These are the ones to
-deal with before anybody real signs up.
+[docs/deployment.md](docs/deployment.md) is the operational guide — how to cut
+a release, how to run one instance, and the example systemd, Caddy and
+Litestream configuration in [deploy/](deploy). This is the shorter list of
+things to deal with before anybody real signs up; the gaps behind them are at
+the end of [docs/security.md](docs/security.md) and what is queued against
+them is in [docs/roadmap.md](docs/roadmap.md).
 
 - **Set `AMICI_SECRET_KEY`.** Production refuses to start without it. It keys
   the HMAC over invite and recovery codes, and there is no rotation mechanism

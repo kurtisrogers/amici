@@ -190,13 +190,16 @@ awake at three in the morning when something is wrong.
 
 **Backups, and a restore that somebody has actually performed.** Amici is one
 SQLite file, which makes backup unusually easy and therefore unusually easy to
-assume is handled. The item is not "write a backup script"; it is "restore
-from a backup into a scratch environment and confirm the result is a working
-service", because an untested backup is a belief rather than a backup.
+assume is handled. [deployment.md](deployment.md) now recommends Litestream
+and ships a configuration for it, so what is left is not writing a script: it
+is restoring from a backup into a scratch environment and confirming the
+result is a working service, because an untested backup is a belief rather
+than a backup.
 
 **Encryption at rest.** The database file is plain today. Whole-volume
-encryption is the pragmatic answer and mostly a deployment concern, but it is
-listed here because it is currently listed as a known gap and nobody owns it.
+encryption is the pragmatic answer and mostly a deployment concern, and
+[deployment.md](deployment.md) says so, but nothing enforces it and nobody
+owns it.
 
 **A readiness endpoint, and a small set of metrics.** `GET /healthz` exists
 and, as its own comment says, says nothing about the system — it answers while
@@ -335,6 +338,14 @@ that never happen.
   restart no longer hands whoever is guessing a fresh budget.
 - Call-to-action links that are announced as links, replacing the
   `role="button"` convention inherited from PicoCSS.
+- A release pipeline: a tag builds static `linux/amd64` and `arm64` binaries
+  with a stamped version and checksums, and [deployment.md](deployment.md)
+  plus [deploy/](../deploy) cover running one instance behind Caddy with
+  Litestream replicating the database.
+- The fixture endpoints moved behind a `fixtures` build tag, so the handler
+  that wipes the database and the one that hands out live password reset links
+  are absent from a release binary rather than merely switched off. CI checks
+  it rather than trusting it.
 
 ## How this document is maintained
 
