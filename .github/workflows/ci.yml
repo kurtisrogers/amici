@@ -48,6 +48,26 @@ jobs:
       - name: Build
         run: go build ./...
 
+      # The browser suite runs a binary built with the fixtures tag, so
+      # nothing else here would notice the tagged configuration failing to
+      # compile until the e2e job did, several minutes later and with a
+      # confusing error. Vet covers both directions.
+      - name: Vet the fixtures build
+        run: go vet -tags fixtures ./...
+
+      # The counterpart check to the one in the release workflow, run on every
+      # pull request so that the guarantee is enforced at review time rather
+      # than discovered when a tag is pushed. The fixture endpoints wipe the
+      # database and hand out live password reset links, so their absence from
+      # a default build is a property worth testing, not just documenting.
+      - name: Confirm fixtures stay out of a default build
+        run: |
+          if go list -deps ./cmd/amici | grep -q 'internal/fixtures'; then
+            echo "internal/fixtures is reachable from cmd/amici without the build tag." >&2
+            exit 1
+          fi
+          echo "internal/fixtures is not in a default build of cmd/amici"
+
       - name: Tests
         # -race because the rate limiter and the session store are shared
         # across requests, and a data race there is exactly the kind of fault
