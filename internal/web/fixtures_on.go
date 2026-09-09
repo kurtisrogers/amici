@@ -1,29 +1,47 @@
+//go:build fixtures
+
 package web
 
 import (
 	"encoding/json"
 	"net/http"
 	"time"
-
-	"github.com/kurtisrogers/amici/internal/fixtures"
 )
 
-// The two handlers in this file only exist when AMICI_ENABLE_FIXTURES is on,
-// and config.Load refuses to turn it on when AMICI_ENV is production. Two
-// independent locks, neither of which relies on remembering to check a flag
-// inside a handler.
+// The fixture endpoints, which exist only in a binary built with the
+// `fixtures` tag.
 //
-// They are what makes the browser suite fast and deterministic: each spec
-// calls the reset endpoint and starts from a world it can reason about,
-// instead of clicking through eight sign-up forms to arrange a friendship.
+// There are now three independent locks on these, and they are worth
+// distinguishing because they fail in different ways.
+//
+// The build tag is the only one that cannot be got wrong by an operator: code
+// behind it is not in a release binary, so no environment variable can
+// resurrect it. AMICI_ENABLE_FIXTURES is a deliberate opt-in, and
+// config.Load refuses it outright when AMICI_ENV is production. Both of the
+// latter are runtime checks on configuration, which is exactly the category
+// of thing that gets copied wrong between two deployments at midnight.
+//
+// The reason for wanting three is what these handlers do. Reset wipes the
+// database. Outbox hands out live password reset links to anybody who asks,
+// with no session required — so in a real deployment it would not be a
+// leak of test data, it would be a complete authentication bypass. Code that
+// dangerous should not be present in the artifact at all, and now is not.
 
-// fixturesResponse is what both endpoints return.
+// registerFixtureRoutes adds the fixture endpoints when hooks were supplied.
+func (s *Server) registerFixtureRoutes(mux *http.ServeMux, base []middleware) {
+	if !s.cfg.EnableFixtures || s.fixtures == nil {
+		return
+	}
+	mux.Handle("POST /fixtures/reset", chain(http.HandlerFunc(s.handleFixturesReset), base...))
+	mux.Handle("GET /fixtures", chain(http.HandlerFunc(s.handleFixturesInfo), base...))
+	mux.Handle("GET /fixtures/outbox", chain(http.HandlerFunc(s.handleFixturesOutbox), base...))
+}
+
+// fixturesResponse is what the reset and info endpoints return.
 type fixturesResponse struct {
-	OK       bool              `json:"ok"`
-	Accounts map[string]string `json:"accounts"`
-	Password string            `json:"password"`
-	// InviteCodes are live request identifiers, keyed by owner handle, plus
-	// one under "expired" for testing the expiry path.
+	OK          bool              `json:"ok"`
+	Accounts    map[string]string `json:"accounts"`
+	Password    string            `json:"password"`
 	InviteCodes map[string]string `json:"invite_codes"`
 	Posts       int               `json:"posts"`
 	People      []personInfo      `json:"people"`
@@ -41,7 +59,7 @@ type personInfo struct {
 
 // handleFixturesReset rebuilds the fixture world and describes it.
 func (s *Server) handleFixturesReset(w http.ResponseWriter, r *http.Request) {
-	seeded, err := s.loadFixtures(r.Context())
+	world, err := s.fixtures.Rebuild(r.Context())
 	if err != nil {
 		s.log.Error("could not load fixtures", "error", err)
 		http.Error(w, "could not load fixtures: "+err.Error(), http.StatusInternalServerError)
@@ -66,28 +84,13 @@ func (s *Server) handleFixturesReset(w http.ResponseWriter, r *http.Request) {
 		s.outbox.Forget()
 	}
 
-	resp := fixturesResponse{
-		OK:          true,
-		Accounts:    map[string]string{},
-		Password:    fixtures.Password,
-		InviteCodes: seeded.InviteCodes,
-		Posts:       seeded.Posts,
-		People:      peopleInfo(),
-	}
-	for handle, acct := range seeded.Accounts {
-		resp.Accounts[handle] = string(acct.ID)
-	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, worldResponse(world))
 }
 
 // handleFixturesInfo describes the fixture cast without touching the database,
 // so a developer can see who is who without wiping their work.
 func (s *Server) handleFixturesInfo(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, fixturesResponse{
-		OK:       true,
-		Password: fixtures.Password,
-		People:   peopleInfo(),
-	})
+	writeJSON(w, http.StatusOK, worldResponse(s.fixtures.Describe()))
 }
 
 // outboxMessage is one message the development sender accepted.
@@ -105,11 +108,6 @@ type outboxMessage struct {
 // boundary would mean the thing being tested was not the thing that runs. So
 // the development sender records instead of delivering, and this reads it
 // back.
-//
-// It is registered on the same terms as the reset endpoint, which is to say
-// only when fixtures are enabled, which production refuses. Worth saying
-// plainly: this endpoint hands out password reset links to anybody who asks,
-// so it existing anywhere real would be a complete authentication bypass.
 func (s *Server) handleFixturesOutbox(w http.ResponseWriter, r *http.Request) {
 	if s.outbox == nil {
 		writeJSON(w, http.StatusOK, []outboxMessage{})
@@ -128,22 +126,6 @@ func (s *Server) handleFixturesOutbox(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func peopleInfo() []personInfo {
-	out := make([]personInfo, 0, len(fixtures.People))
-	for _, p := range fixtures.People {
-		out = append(out, personInfo{
-			Handle:           p.Handle,
-			DisplayName:      p.DisplayName,
-			Email:            p.Email,
-			Role:             string(p.Role),
-			ReachableByEmail: p.ReachableByEmail,
-			EmailConfirmed:   !p.Unconfirmed,
-			Note:             p.Note,
-		})
-	}
-	return out
-}
-
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -151,4 +133,30 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(v)
+}
+
+func worldResponse(world *FixtureWorld) fixturesResponse {
+	if world == nil {
+		return fixturesResponse{OK: true}
+	}
+	resp := fixturesResponse{
+		OK:          true,
+		Accounts:    world.AccountIDs,
+		Password:    world.Password,
+		InviteCodes: world.InviteCodes,
+		Posts:       world.Posts,
+		People:      make([]personInfo, 0, len(world.People)),
+	}
+	for _, p := range world.People {
+		resp.People = append(resp.People, personInfo{
+			Handle:           p.Handle,
+			DisplayName:      p.DisplayName,
+			Email:            p.Email,
+			Role:             p.Role,
+			ReachableByEmail: p.ReachableByEmail,
+			EmailConfirmed:   p.EmailConfirmed,
+			Note:             p.Note,
+		})
+	}
+	return resp
 }

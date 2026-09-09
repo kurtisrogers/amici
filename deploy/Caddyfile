@@ -1,0 +1,47 @@
+# Caddy in front of Amici.
+#
+#   sudo install -m 0644 deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Caddy is here for one reason: automatic TLS, which it does correctly with no
+# configuration and renews without being asked. Amici sends password reset
+# links, so a certificate that quietly expires is an outage that locks people
+# out of their accounts.
+#
+# Replace the hostname. It has to match AMICI_BASE_URL exactly.
+
+amici.example {
+	encode zstd gzip
+
+	# Amici sets its own security headers, including the Content Security
+	# Policy that the profile canvas sandbox depends on. Nothing is added
+	# here on purpose: a duplicated CSP header is not merged, it is
+	# intersected in ways that are hard to predict, and the application is
+	# the only thing that knows which policy each response needs.
+	reverse_proxy 127.0.0.1:8080 {
+		# X-Forwarded-For, which Amici only believes because
+		# AMICI_TRUST_PROXY says so. This is the pair that makes per-client
+		# rate limiting work; see amici.env.example.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+
+		# The profile canvas editor accepts up to 24KB of HTML and 12KB of
+		# CSS, and Amici caps a request body itself, so nothing here needs
+		# to be generous. Fail fast instead.
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 30s
+		}
+	}
+
+	# Caddy's access log is the one place a deployment can accidentally
+	# start keeping what Amici deliberately does not: a per-request record
+	# of addresses and paths. docs/security.md says logs are deliberately
+	# thin, and that promise is only as good as the proxy in front.
+	#
+	# Errors only, so a fault is still diagnosable.
+	log {
+		output file /var/log/caddy/amici.log
+		level ERROR
+	}
+}

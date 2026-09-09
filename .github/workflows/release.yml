@@ -1,0 +1,132 @@
+name: Release
+
+# Releases are cut from a tag, and only from a tag. Pushing v1.4.0 is the
+# whole ceremony: there is no button to press, no version to remember to bump
+# in a second place, and no way to publish a build that is not identical to
+# something in the history.
+on:
+  push:
+    tags: ["v*"]
+  # Runnable by hand against a tag, for the day a release job fails for a
+  # reason that has nothing to do with the code.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          # Full history, so the binary's embedded VCS stamp is real.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # A release that has not been tested is not a release. The full suite
+      # runs on every pull request, but a tag can be pushed to a commit whose
+      # checks are old or were never run, so the gate is repeated here.
+      - name: Vet
+        run: go vet ./...
+
+      - name: Tests
+        run: go test -race -count=1 ./...
+
+      - name: Build
+        env:
+          VERSION: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          # CGO_ENABLED=0 is the point of choosing a pure-Go SQLite driver:
+          # the result is one statically linked file with no libc to match, so
+          # it runs on any Linux of the right architecture, including a
+          # distroless or scratch container.
+          #
+          # -trimpath removes local filesystem paths, which makes the build
+          # reproducible and stops the binary carrying a runner's directory
+          # layout. -s -w drop the symbol and DWARF tables, which is most of
+          # the difference between 18MB and 12MB and costs nothing that a
+          # stack trace needs.
+          for arch in amd64 arm64; do
+            echo "building linux/${arch}"
+            CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" \
+              go build \
+                -trimpath \
+                -ldflags "-s -w -X main.version=${VERSION}" \
+                -o "dist/amici-linux-${arch}" \
+                ./cmd/amici
+          done
+
+          # amiciadmin travels with the server: changing somebody's role is
+          # something an operator does at a terminal on the machine, so it has
+          # to be on the machine. amiciseed is deliberately not shipped — it
+          # exists to wipe a database and fill it with test people.
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" \
+              go build \
+                -trimpath \
+                -ldflags "-s -w -X main.version=${VERSION}" \
+                -o "dist/amiciadmin-linux-${arch}" \
+                ./cmd/amiciadmin
+          done
+
+      # The reason the whole release is built without the fixtures tag, stated
+      # as a check rather than as a comment. If a future change makes the
+      # fixture cast reachable from the server binary again, this fails and
+      # the release does not happen.
+      - name: Confirm no development scaffolding shipped
+        run: |
+          set -euo pipefail
+          if go list -deps ./cmd/amici | grep -q 'internal/fixtures'; then
+            echo "internal/fixtures is reachable from cmd/amici in a default build." >&2
+            echo "The fixture endpoints wipe the database and hand out password" >&2
+            echo "reset links. They must stay behind the 'fixtures' build tag." >&2
+            exit 1
+          fi
+          for needle in 'friends-and-family' 'fixtures/reset' 'fixtures/outbox'; do
+            for binary in dist/amici-linux-*; do
+              if strings "${binary}" | grep -qF "${needle}"; then
+                echo "${binary} contains '${needle}', which must not ship." >&2
+                exit 1
+              fi
+            done
+          done
+          echo "no fixture scaffolding in the release binaries"
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum amici-linux-* amiciadmin-linux-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # --verify-tag so a typo in a dispatch input cannot invent a release
+          # for a tag that does not exist. Notes are generated from the commit
+          # history, which is the only description guaranteed to be accurate.
+          gh release create "${VERSION}" \
+            --title "${VERSION}" \
+            --generate-notes \
+            --verify-tag \
+            dist/amici-linux-amd64 \
+            dist/amici-linux-arm64 \
+            dist/amiciadmin-linux-amd64 \
+            dist/amiciadmin-linux-arm64 \
+            dist/SHA256SUMS

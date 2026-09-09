@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/kurtisrogers/amici/internal/config"
-	"github.com/kurtisrogers/amici/internal/fixtures"
 	"github.com/kurtisrogers/amici/internal/mail"
 	"github.com/kurtisrogers/amici/internal/service"
 )
@@ -30,20 +29,17 @@ var templateFS embed.FS
 //go:embed all:static
 var staticFS embed.FS
 
-// LoadFixtures rebuilds the fixture world. The web layer is handed this as a
-// function rather than being given the store, so the only thing it can do with
-// a resettable database is exactly this one operation.
-type LoadFixtures func(context.Context) (*fixtures.Seeded, error)
-
 // Options is what the server needs to be built.
 type Options struct {
 	Config   *config.Config
 	Services *service.Services
 	Logger   *slog.Logger
-	// LoadFixtures is nil unless fixtures are enabled. When it is nil the
-	// fixture routes are not registered at all, so there is no handler to
-	// reach even if the config flag were somehow wrong.
-	LoadFixtures LoadFixtures
+	// Fixtures is nil unless this is a binary built with the `fixtures` tag
+	// and the configuration allows them. When it is nil the fixture routes
+	// are not registered at all, so there is no handler to reach even if the
+	// config flag were somehow wrong — and in a release build the handlers do
+	// not exist to be registered. See fixtures.go.
+	Fixtures *FixtureHooks
 	// Outbox is the development mail sender, when one is in use. It is nil in
 	// any deployment sending real mail, and the endpoint that reads it is
 	// registered on the same terms as the fixture routes.
@@ -52,14 +48,14 @@ type Options struct {
 
 // Server holds everything an HTTP handler needs.
 type Server struct {
-	cfg          *config.Config
-	services     *service.Services
-	log          *slog.Logger
-	templates    *template.Template
-	static       http.Handler
-	handler      http.Handler
-	loadFixtures LoadFixtures
-	outbox       *mail.Outbox
+	cfg       *config.Config
+	services  *service.Services
+	log       *slog.Logger
+	templates *template.Template
+	static    http.Handler
+	handler   http.Handler
+	fixtures  *FixtureHooks
+	outbox    *mail.Outbox
 }
 
 // New builds the server and parses templates. Templates are parsed once at
@@ -84,12 +80,12 @@ func New(opts Options) (*Server, error) {
 	}
 
 	s := &Server{
-		cfg:          cfg,
-		services:     services,
-		log:          log,
-		templates:    tpl,
-		loadFixtures: opts.LoadFixtures,
-		outbox:       opts.Outbox,
+		cfg:       cfg,
+		services:  services,
+		log:       log,
+		templates: tpl,
+		fixtures:  opts.Fixtures,
+		outbox:    opts.Outbox,
 	}
 	s.static = s.staticHandler(sub)
 	s.handler = s.routes()

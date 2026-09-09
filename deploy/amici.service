@@ -1,0 +1,77 @@
+# systemd unit for Amici.
+#
+#   sudo install -m 0644 deploy/amici.service /etc/systemd/system/amici.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now amici
+#
+# See docs/deployment.md. The two things worth knowing before editing this:
+# Amici is one process holding one SQLite file, so nothing here may ever start
+# a second copy; and it listens on loopback only, expecting TLS to be
+# terminated in front of it.
+
+[Unit]
+Description=Amici
+Documentation=https://github.com/kurtisrogers/amici
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=amici
+Group=amici
+
+# The secrets live in a file readable only by root, not in this unit, so that
+# `systemctl cat amici` and the journal do not contain an SMTP password.
+EnvironmentFile=/etc/amici/amici.env
+
+ExecStart=/usr/local/bin/amici
+
+# SIGTERM is what Amici's graceful shutdown waits on: in-flight requests get
+# the shutdown grace period rather than being dropped. The kill timeout is
+# comfortably above AMICI_SHUTDOWN equivalent so systemd never has to escalate
+# to SIGKILL during a normal restart.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+Restart=on-failure
+RestartSec=2s
+
+# Hardening. Amici needs to read its binary, write one directory, and talk to
+# the network; everything else is taken away. Most of these are one line here
+# and a whole class of vulnerability that stops being reachable.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete
+
+# The only writable path. ProtectSystem=strict makes everything else
+# read-only, so a bug that tries to write anywhere but here fails rather than
+# succeeding somewhere surprising.
+ReadWritePaths=/var/lib/amici
+
+# Journald gets the structured log as-is. Amici writes JSON in production and
+# one line per request, with no query strings and no addresses in it, so the
+# journal is not a second copy of who did what.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

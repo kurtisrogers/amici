@@ -1,0 +1,40 @@
+# Litestream: continuous replication of Amici's SQLite database.
+#
+#   sudo install -m 0600 deploy/litestream.yml /etc/litestream.yml
+#   sudo systemctl enable --now litestream
+#
+# See docs/deployment.md. This is the single most valuable thing to set up
+# before inviting anybody real, and the reason is not abstract: Amici is one
+# file on one machine, so without this, the failure of that one disk is the
+# end of every photograph, message and friendship anybody put here.
+#
+# Litestream ships the WAL to object storage as it is written, so the recovery
+# point is seconds rather than whenever the last snapshot ran. It works by
+# holding a read lock on the database, which is compatible with Amici's
+# single writer and is another reason not to run two instances.
+
+dbs:
+  - path: /var/lib/amici/amici.db
+    replicas:
+      - type: s3
+        # Any S3-compatible store. Backblaze B2 and Cloudflare R2 are both
+        # considerably cheaper than S3 for something this small, and R2 has
+        # no egress charge, which matters on the day you are restoring and
+        # would rather not think about the bill.
+        bucket: amici-backups
+        path: amici.db
+        region: us-east-1
+        # endpoint: s3.us-west-000.backblazeb2.com
+
+        # Credentials come from the environment, not from this file:
+        # LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY in the
+        # unit's EnvironmentFile. Use a key scoped to write-only on this one
+        # bucket — a backup credential that can also delete is a backup that
+        # ransomware can take with it.
+
+        # Keep a day of WAL so a mistake noticed the next morning is still
+        # recoverable, and a snapshot every six hours so a restore does not
+        # have to replay a whole day of writes.
+        retention: 24h
+        snapshot-interval: 6h
+        validation-interval: 12h
