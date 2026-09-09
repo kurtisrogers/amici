@@ -61,7 +61,6 @@ type TokenRepo interface {
 	// Minting a new reset link invalidates the last one, and a completed
 	// password change invalidates every reset link in flight.
 	DeleteTokensForAccount(ctx context.Context, accountID ID, purpose TokenPurpose) error
-	CountTokensSince(ctx context.Context, accountID ID, purpose TokenPurpose, since time.Time) (int, error)
 	PurgeExpiredTokens(ctx context.Context, before time.Time) (int, error)
 }
 

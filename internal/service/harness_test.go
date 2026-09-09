@@ -217,6 +217,20 @@ func (h *harness) account(handle string, role domain.Role, birthYear int) *domai
 	return acct
 }
 
+// restart builds a second set of services over the same database, which is
+// what a deploy looks like to anything that is supposed to be durable.
+func (h *harness) restart() *Services {
+	h.t.Helper()
+	return New(Deps{
+		Store:   h.store,
+		Clock:   h.clock,
+		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Secret:  []byte("test-secret-test-secret-test-sec"),
+		BaseURL: "https://amici.test",
+		Mailer:  h.mail,
+	})
+}
+
 // signIn signs in and returns the account and the session token.
 //
 // Sign-in has two endings, and almost every test in this package is about an

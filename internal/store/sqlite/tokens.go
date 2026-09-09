@@ -118,22 +118,6 @@ func (s *Store) DeleteTokensForAccount(ctx context.Context, accountID domain.ID,
 	return translate(err, "tokens")
 }
 
-// CountTokensSince counts how many tokens of a purpose were minted for an
-// account in a window. This is the durable half of rationing how often
-// somebody can ask us to send them an email.
-func (s *Store) CountTokensSince(ctx context.Context, accountID domain.ID, purpose domain.TokenPurpose, since time.Time) (int, error) {
-	var n int
-	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM account_tokens
-		 WHERE account_id = ? AND purpose = ? AND created_at >= ?`,
-		string(accountID), string(purpose), formatTime(since),
-	).Scan(&n)
-	if err != nil {
-		return 0, translate(err, "token count")
-	}
-	return n, nil
-}
-
 // PurgeExpiredTokens deletes tokens that can no longer be used.
 func (s *Store) PurgeExpiredTokens(ctx context.Context, before time.Time) (int, error) {
 	res, err := s.db.ExecContext(ctx,

@@ -121,22 +121,29 @@ func (a *Accounts) redeemToken(ctx context.Context, purpose domain.TokenPurpose,
 	return tok, acct, nil
 }
 
-// mayWeEmail applies the limits on sending mail on somebody's behalf, so that
-// neither the confirmation nor the reset form can be used to fill a stranger's
-// inbox with messages signed by Amici.
-func (a *Accounts) mayWeEmail(ctx context.Context, acct *domain.Account, purpose domain.TokenPurpose, perDay int, clientKey string) bool {
-	if clientKey != "" && !a.limiter.allow(ctx, "accountmail:client:"+clientKey, accountEmailsPerClientHour, time.Hour) {
-		return false
-	}
-	// The per-account count comes from the tokens table rather than from a
-	// counter, so it holds across a restart and cannot be reset by asking
-	// from somewhere else.
-	sent, err := a.deps.Store.CountTokensSince(ctx, acct.ID, purpose, a.deps.Clock.Now().Add(-accountEmailWindow))
-	if err != nil {
-		a.deps.Logger.Warn("could not count sent messages", "error", err)
+// Two limits guard the three forms that make Amici send somebody an email, and
+// they are separate because they answer different questions.
+//
+// mayWeEmailFrom rations by whoever is asking, and stops one machine working
+// through a list of addresses. mayWeEmail rations by the mailbox on the
+// receiving end, and stops any of these forms being used to fill a stranger's
+// inbox with messages signed by us.
+//
+// Each is charged exactly once per request. Charging the client budget in both
+// would matter more than it sounds: the password reset form deliberately
+// behaves identically whether or not the address belongs to an account, and if
+// an existing address cost twice as much budget as an unknown one, the point at
+// which the form started refusing would tell the caller which it was.
+func (a *Accounts) mayWeEmailFrom(ctx context.Context, clientKey string) bool {
+	if clientKey == "" {
 		return true
 	}
-	return sent < perDay
+	return a.limiter.allow(ctx, "accountmail:client:"+clientKey, accountEmailsPerClientHour, time.Hour)
+}
+
+func (a *Accounts) mayWeEmail(ctx context.Context, acct *domain.Account, purpose domain.TokenPurpose, perDay int) bool {
+	return a.limiter.allow(ctx,
+		"accountmail:"+string(purpose)+":"+string(acct.ID), perDay, accountEmailWindow)
 }
 
 // SendEmailConfirmation mints and sends a confirmation link.
@@ -149,7 +156,7 @@ func (a *Accounts) SendEmailConfirmation(ctx context.Context, acct *domain.Accou
 	if acct.EmailConfirmed() {
 		return fmt.Errorf("%w: that address is already confirmed", domain.ErrValidation)
 	}
-	if !a.mayWeEmail(ctx, acct, domain.PurposeEmailConfirm, confirmationEmailsPerDay, clientKey) {
+	if !a.mayWeEmailFrom(ctx, clientKey) || !a.mayWeEmail(ctx, acct, domain.PurposeEmailConfirm, confirmationEmailsPerDay) {
 		return fmt.Errorf(
 			"%w: we have sent that address a few confirmation links already today. Please look for one of those, and try again tomorrow if none of them arrived",
 			domain.ErrRateLimited)
@@ -177,16 +184,22 @@ func (a *Accounts) SendEmailConfirmation(ctx context.Context, acct *domain.Accou
 func (a *Accounts) ConfirmEmail(ctx context.Context, secret string) (*domain.Account, error) {
 	tok, acct, err := a.findToken(ctx, domain.PurposeEmailConfirm, secret)
 	if err != nil {
-		// A link for a change of address is a different purpose and therefore
-		// a different row. It is only tried when there is no confirmation
-		// token at all: a confirmation link that has expired should say so
-		// rather than report whatever the second lookup made of it.
-		if errors.Is(err, domain.ErrValidation) && err == errTokenUnusable {
-			if changed, cerr := a.confirmEmailChange(ctx, secret); cerr == nil {
-				return changed, nil
-			}
+		// A confirmation link that has expired or been used should say so,
+		// rather than report whatever a lookup for a different purpose made
+		// of it.
+		if !errors.Is(err, errTokenUnusable) {
+			return nil, err
 		}
-		return nil, err
+		// A link for a change of address is a different purpose and therefore
+		// a different row, so it is only tried when there was no confirmation
+		// token at all.
+		changed, cerr := a.confirmEmailChange(ctx, secret)
+		if errors.Is(cerr, errTokenUnusable) {
+			// Neither purpose knows this link, so there is nothing to say
+			// beyond that it is not one of ours.
+			return nil, err
+		}
+		return changed, cerr
 	}
 
 	// The address on the account may have moved on since the link was sent, in
@@ -232,7 +245,7 @@ type PendingConfirmation struct {
 func (a *Accounts) PeekEmailConfirmation(ctx context.Context, secret string) (*PendingConfirmation, error) {
 	if tok, _, err := a.findToken(ctx, domain.PurposeEmailConfirm, secret); err == nil {
 		return &PendingConfirmation{Address: tok.Email}, nil
-	} else if !errors.Is(err, domain.ErrValidation) || err != errTokenUnusable {
+	} else if !errors.Is(err, errTokenUnusable) {
 		return nil, err
 	}
 	tok, _, err := a.findToken(ctx, domain.PurposeEmailChange, secret)
@@ -267,7 +280,7 @@ func (a *Accounts) RequestEmailChange(ctx context.Context, actor *domain.Account
 	if strings.EqualFold(email, actor.Email) {
 		return fmt.Errorf("%w: that is already the address on your account", domain.ErrValidation)
 	}
-	if !a.mayWeEmail(ctx, actor, domain.PurposeEmailChange, confirmationEmailsPerDay, clientKey) {
+	if !a.mayWeEmailFrom(ctx, clientKey) || !a.mayWeEmail(ctx, actor, domain.PurposeEmailChange, confirmationEmailsPerDay) {
 		return fmt.Errorf(
 			"%w: we have sent a few of these already today. Please try again tomorrow",
 			domain.ErrRateLimited)
@@ -375,7 +388,10 @@ func (a *Accounts) CancelEmailChange(ctx context.Context, actor *domain.Account)
 // differently for an address that is on Amici is a page that tells strangers
 // who is on Amici, and on a network with no search that is the whole game.
 func (a *Accounts) RequestPasswordReset(ctx context.Context, email, clientKey string) error {
-	if clientKey != "" && !a.limiter.allow(ctx, "accountmail:client:"+clientKey, accountEmailsPerClientHour, time.Hour) {
+	// The only error this function ever returns, and the only one it can
+	// return without saying something about the address, because it is charged
+	// before the address is looked up at all.
+	if !a.mayWeEmailFrom(ctx, clientKey) {
 		return fmt.Errorf(
 			"%w: that is a lot of reset requests from one place. Please wait a little while",
 			domain.ErrRateLimited)
@@ -405,7 +421,7 @@ func (a *Accounts) RequestPasswordReset(ctx context.Context, email, clientKey st
 	if !acct.EmailConfirmed() {
 		return nil
 	}
-	if !a.mayWeEmail(ctx, acct, domain.PurposePasswordReset, passwordResetsPerDay, "") {
+	if !a.mayWeEmail(ctx, acct, domain.PurposePasswordReset, passwordResetsPerDay) {
 		return nil
 	}
 
