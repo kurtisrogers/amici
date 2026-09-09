@@ -28,7 +28,7 @@ type FixtureWorld struct {
 	Posts       int
 	// Password is the one every fixture account shares.
 	Password string
-	People    []FixturePerson
+	People   []FixturePerson
 }
 
 // FixturePerson is one member of the cast, described the way a person would
