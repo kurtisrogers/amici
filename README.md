@@ -148,8 +148,9 @@ deal with before anybody real signs up.
 - **Change the address in `/.well-known/security.txt`.**
 - **Run one instance.** The store is a local SQLite file, so a second instance
   is not a scaling step, it is two different services.
-- **There is no way for a member to report anything.** Support can act and has
-  no inbox through which to hear that they should.
+- **Somebody has to read the reports.** Members can report a post, a comment,
+  a canvas or an account, and those land in a queue that does nothing until a
+  person with support access looks at it.
 
 ## Licence
 

@@ -105,20 +105,29 @@ because the feature is good.
 Amici exists to be a place where a family can be online together, and the
 protections for the youngest members are the least finished part of it.
 
+Reporting itself is built: a member can report a post, a comment, a profile
+canvas or an account, it is rate limited, and it lands in a queue support can
+resolve. The reason field is the mechanism that lets support act without being
+able to read member content — the reporter quotes what they saw, which puts
+the decision to share a friend's words in the hands of the person who received
+them. What is unfinished is everything either side of that queue.
+
 ### Now
 
-**Reporting a post or a member.** There is currently no way for a member to
-tell anybody that something is wrong. Support has tools to act and no inbox
-through which to learn that they should. This is the largest genuine hole in
-the product: every other child-protection measure here is preventative, and
-prevention without a reporting route means the first time anybody finds out
-about a problem is when somebody leaves.
+**Closing the loop with the person who reported something.** A report is
+resolved and the member who raised it is never told anything. That is the
+single most demoralising possible outcome: somebody worried enough to fill in
+a form learns only that nothing visibly happened, which teaches them not to
+bother next time. It runs into the four-messages promise the same way the
+sign-in alert does, and probably wants an in-application answer rather than an
+email, since "we looked at what you told us" does not need to sit in an inbox.
 
-The design constraint is the same one that shapes the support console: a
-report has to give support enough to act on without turning "report" into a
-way to make a stranger read your friend's post. The likely shape is that a
-report grants access to the specific reported item, scoped and logged in the
-audit trail, rather than lifting the visibility rules generally.
+**Grouping reports about the same subject.** Five members reporting one
+account produces five unrelated rows, so the one signal that most reliably
+distinguishes a misunderstanding from a real problem — how many different
+people independently reported it — is invisible to the person triaging. The
+queue also has no pagination and no ordering beyond recency, which is fine for
+a fixture world and not for a real one.
 
 ### Next
 
@@ -163,8 +172,12 @@ an explanation.
 
 ### Later
 
-**Per-member canvas budgets**, so one enormous page cannot make a friend's
-browser struggle on a phone.
+**A cost budget for a canvas, rather than only a size one.** The source is
+already capped at 24KB of HTML and 12KB of CSS, which bounds what a member can
+store but not what it costs to display: the CSS allowlist permits animations,
+and a page well inside the byte limit can still make a cheap phone
+uncomfortable. Nobody has measured this, so it is Later and phrased as a
+suspicion rather than a finding.
 
 ---
 
@@ -185,9 +198,13 @@ service", because an untested backup is a belief rather than a backup.
 encryption is the pragmatic answer and mostly a deployment concern, but it is
 listed here because it is currently listed as a known gap and nobody owns it.
 
-**Health and readiness endpoints, and a small set of metrics.** There is
-structured logging and nothing else, so the only way to know Amici is
-struggling is that somebody says so. The metrics worth having are boring:
+**A readiness endpoint, and a small set of metrics.** `GET /healthz` exists
+and, as its own comment says, says nothing about the system — it answers while
+the database is unreachable, which makes it a liveness probe and not the thing
+you want a load balancer consulting before it sends somebody a page. Beyond
+that there is structured logging and nothing else, so the only way to know
+Amici is struggling is that somebody says so. The metrics worth having are
+boring:
 request rate and latency by route, database errors, mail send failures, and
 the counts the housekeeping sweep already produces. Deliberately no per-member
 anything — an operational metric that can be narrowed to one person is
