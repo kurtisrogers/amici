@@ -22,14 +22,20 @@ binary="${work_dir}/amici"
 rm -rf "${work_dir}"
 mkdir -p "${work_dir}"
 
+# Built with the fixtures tag, because the endpoints this suite uses to reset
+# the world and read the outbox only exist in a binary built that way. A
+# release build does not contain them at all, which is the point of the tag.
+# CI builds and vets the untagged configuration separately, so the release
+# artifact cannot break unnoticed just because nothing here exercises it.
 echo "amici-e2e: building" >&2
-(cd "${repo_root}" && go build -o "${binary}" ./cmd/amici)
+(cd "${repo_root}" && go build -tags fixtures -o "${binary}" ./cmd/amici)
 
 echo "amici-e2e: starting on 127.0.0.1:${port}" >&2
 
-# AMICI_ENV=test is what allows fixtures at all; production refuses them
-# outright and will not start with the flag set. The secret is fixed so that
-# an invite code minted before a restart still verifies afterwards.
+# AMICI_ENV=test is the second of the three locks on the fixture endpoints:
+# the build tag above is the first, this flag is the third, and production
+# refuses the flag outright. The secret is fixed so that an invite code minted
+# before a restart still verifies afterwards.
 AMICI_ENV=test \
 AMICI_ADDR="127.0.0.1:${port}" \
 AMICI_BASE_URL="http://127.0.0.1:${port}" \

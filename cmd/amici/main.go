@@ -1,38 +1,88 @@
 // Command amici runs the server.
 //
-// Everything is configured through the environment so that the same binary
-// runs on a laptop and in production with no build tags and no config file to
-// forget to copy. internal/config documents each variable and refuses to
-// start with a combination that would be unsafe, which is why there is so
-// little logic here: this file wires five packages together and gets out of
-// the way.
+// Everything a deployment needs to vary is configured through the environment,
+// so the artifact that runs in production is the artifact that was tested.
+// internal/config documents each variable and refuses to start with a
+// combination that would be unsafe, which is why there is so little logic
+// here: this file wires six packages together and gets out of the way.
+//
+// There is exactly one build tag, `fixtures`, and it only ever removes things.
+// It gates the development-only endpoints that rebuild the fixture world and
+// read back the outbox, because one of those wipes the database and the other
+// hands out live password reset links. Every rule about who may see what is
+// identical in both builds; see docs/deployment.md for why that line is drawn
+// at the build rather than at a configuration flag.
 package main
 
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
+	"runtime/debug"
 	"syscall"
 
 	"github.com/kurtisrogers/amici/internal/config"
 	"github.com/kurtisrogers/amici/internal/domain"
-	"github.com/kurtisrogers/amici/internal/fixtures"
 	"github.com/kurtisrogers/amici/internal/mail"
 	"github.com/kurtisrogers/amici/internal/service"
 	"github.com/kurtisrogers/amici/internal/store/sqlite"
 	"github.com/kurtisrogers/amici/internal/web"
 )
 
+// version is stamped at build time by the release workflow:
+//
+//	-ldflags "-X main.version=v1.2.3"
+//
+// It is "dev" in anything built without that, which is the honest answer for
+// a binary somebody compiled themselves. Knowing exactly what is deployed is
+// the difference between reading a bug report and guessing at one.
+var version = "dev"
+
 func main() {
+	showVersion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
+	if *showVersion {
+		fmt.Println(versionString())
+		return
+	}
 	if err := run(); err != nil {
 		// The logger may not exist yet at the point something fails, so the
 		// last word goes to stderr.
 		fmt.Fprintf(os.Stderr, "amici: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// versionString describes this binary.
+//
+// The VCS revision comes from the Go toolchain's own build info rather than
+// another ldflag, so it is right even for a binary somebody built by hand,
+// which is exactly the binary whose provenance is least obvious later.
+func versionString() string {
+	revision, modified := "unknown", false
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				revision = setting.Value
+			case "vcs.modified":
+				modified = setting.Value == "true"
+			}
+		}
+	}
+	if len(revision) > 12 {
+		revision = revision[:12]
+	}
+	if modified {
+		revision += "-dirty"
+	}
+	return fmt.Sprintf("amici %s (%s, %s/%s, %s)",
+		version, revision, runtime.GOOS, runtime.GOARCH, runtime.Version())
 }
 
 func run() error {
@@ -42,6 +92,9 @@ func run() error {
 	}
 
 	log := newLogger(cfg)
+	// First line in the log, so that a report of odd behaviour can always be
+	// tied to a specific build without asking.
+	log.Info("starting", slog.String("version", versionString()), slog.String("env", string(cfg.Env)))
 
 	// Cancelled on SIGINT or SIGTERM, which gives in-flight requests the
 	// shutdown grace period rather than dropping them.
@@ -73,25 +126,17 @@ func run() error {
 		Mailer:  sender,
 	})
 
-	opts := web.Options{
+	// The fixture hooks are only supplied by a binary built with the
+	// `fixtures` tag, and only when the config allows them. A release binary
+	// has no code capable of wiping a database, whatever it is configured to
+	// do. See fixtures_on.go and fixtures_off.go.
+	srv, err := web.New(web.Options{
 		Config:   cfg,
 		Services: services,
 		Logger:   log,
 		Outbox:   outbox,
-	}
-
-	// The fixture loader is only handed over when the config allows it, and
-	// config.Load will not allow it in production. The web layer therefore
-	// has no way to wipe a database unless both of those are true.
-	if cfg.EnableFixtures {
-		log.Warn("fixtures are enabled: /fixtures/reset will wipe this database",
-			slog.String("database", cfg.DatabasePath))
-		opts.LoadFixtures = func(ctx context.Context) (*fixtures.Seeded, error) {
-			return fixtures.Load(ctx, store, clock, cfg.SecretKey, true)
-		}
-	}
-
-	srv, err := web.New(opts)
+		Fixtures: fixtureHooks(cfg, store, clock, log),
+	})
 	if err != nil {
 		return err
 	}

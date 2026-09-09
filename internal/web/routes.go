@@ -142,14 +142,12 @@ func (s *Server) routes() http.Handler {
 	gated("GET /developer", domain.CapViewDiagnostics, s.handleDeveloperConsole)
 	gated("POST /developer/canvas/rerender", domain.CapViewDiagnostics, s.handleReRenderCanvases)
 
-	// Fixtures, for local development and the end-to-end suite. Registered
-	// only when explicitly enabled, and the config refuses to enable it in
-	// production, so this is two independent locks rather than one.
-	if s.cfg.EnableFixtures && s.loadFixtures != nil {
-		mux.Handle("POST /fixtures/reset", chain(http.HandlerFunc(s.handleFixturesReset), base...))
-		mux.Handle("GET /fixtures", chain(http.HandlerFunc(s.handleFixturesInfo), base...))
-		mux.Handle("GET /fixtures/outbox", chain(http.HandlerFunc(s.handleFixturesOutbox), base...))
-	}
+	// Fixtures, for local development and the end-to-end suite. This adds
+	// nothing at all unless the binary was built with the `fixtures` tag,
+	// the configuration enables them, and the hooks were supplied — three
+	// independent locks, only one of which an operator can get wrong. See
+	// fixtures.go and fixtures_off.go.
+	s.registerFixtureRoutes(mux, base)
 
 	// Anything unrouted. ServeMux would answer "/" for every unmatched path,
 	// so the catch-all is explicit and returns the same page as a profile a
