@@ -97,15 +97,24 @@ What is done:
 - The whole application is keyboard reachable, which follows from it being
   forms and links.
 
-One known wart, recorded rather than hidden. PicoCSS styles a call-to-action
-anchor by putting `role="button"` on it, and Amici follows that convention —
-so a link that navigates is announced as a button, and keyboard users are
-implicitly told Space will activate it when only Enter does. Pico's button
-variants (`.secondary`, `.outline`) are only defined for button-ish selectors,
-so fixing it properly means reimplementing Pico's button styling behind a
-class. It is worth doing; it has not been done. The browser specs query these
-controls by the button role, which is the role the accessibility tree actually
-reports, with a comment pointing here.
+- Links are announced as links. This used to be a recorded wart: PicoCSS
+  styles a call-to-action anchor by putting `role="button"` on it, and Amici
+  followed that convention, so a link that navigates was announced as a button
+  and keyboard users were implicitly told Space would activate it when only
+  Enter does.
+
+  It is fixed by reimplementing the styling behind a class instead of a lie
+  about the role. `a.amici-cta` in `amici.css` gives an anchor the same
+  appearance Pico gives a button, with `--quiet` and `--small` variants
+  standing in for Pico's `.secondary` and `.outline`, which are only defined
+  for button-ish selectors. The markup is now an ordinary `<a href>` with a
+  class, and the browser specs query these controls by the link role, because
+  that is what they are.
+
+What is not done yet is in `docs/roadmap.md`: there has been no screen reader
+pass and no automated audit in CI, so what is above is a description of intent
+plus the checks the specs happen to make, not a claim of conformance to a
+level.
 
 ## Adding a page
 

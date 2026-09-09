@@ -48,7 +48,7 @@ func (c *Canvas) Save(ctx context.Context, actor *domain.Account, in CanvasDraft
 			domain.ErrForbidden,
 		)
 	}
-	if !c.limiter.allow("canvas:"+string(actor.ID), canvasSavesPerHour, time.Hour) {
+	if !c.limiter.allow(ctx, "canvas:"+string(actor.ID), canvasSavesPerHour, time.Hour) {
 		return nil, fmt.Errorf("%w: that is a lot of saving. Try again in a little while", domain.ErrRateLimited)
 	}
 	if len(in.HTML) > domain.CanvasHTMLMaxLen {

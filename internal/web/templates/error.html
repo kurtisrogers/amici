@@ -20,11 +20,11 @@
 
   <p class="amici-btn-row amici-btn-row--centred">
     {{if .Viewer}}
-      <a href="/feed" role="button">Your friends' posts</a>
-      <a href="/friends" role="button" class="secondary outline">Friends</a>
+      <a href="/feed" class="amici-cta">Your friends' posts</a>
+      <a href="/friends" class="amici-cta amici-cta--quiet">Friends</a>
     {{else}}
-      <a href="/" role="button">Back to the front</a>
-      <a href="/signin" role="button" class="secondary outline">Sign in</a>
+      <a href="/" class="amici-cta">Back to the front</a>
+      <a href="/signin" class="amici-cta amici-cta--quiet">Sign in</a>
     {{end}}
   </p>
 </div>

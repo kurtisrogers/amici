@@ -115,11 +115,11 @@ func TestSignInFailuresAreIndistinguishable(t *testing.T) {
 
 	rosa := h.member("rosa")
 
-	_, _, wrongPassword := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	_, _, wrongPassword := h.signIn(Credentials{
 		Email:    rosa.Email,
 		Password: "not-the-right-password",
 	})
-	_, _, noSuchAccount := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	_, _, noSuchAccount := h.signIn(Credentials{
 		Email:    "nobody@example.test",
 		Password: "not-the-right-password",
 	})
@@ -142,7 +142,7 @@ func TestSuccessfulSignInsAreNotRationed(t *testing.T) {
 	rosa := h.member("rosa")
 
 	for i := 0; i < signInFailuresPerClient*3; i++ {
-		if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+		if _, _, err := h.signIn(Credentials{
 			Email:     rosa.Email,
 			Password:  testPassword,
 			ClientKey: "192.0.2.10",
@@ -158,7 +158,7 @@ func TestRepeatedGuessingIsLockedOut(t *testing.T) {
 
 	rosa := h.member("rosa")
 	guess := func() error {
-		_, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+		_, _, err := h.signIn(Credentials{
 			Email:     rosa.Email,
 			Password:  "not-the-right-password",
 			ClientKey: "198.51.100.7",
@@ -177,7 +177,7 @@ func TestRepeatedGuessingIsLockedOut(t *testing.T) {
 
 	// And the real password is refused too, because letting it through would
 	// make the lockout a way to test passwords rather than a stop to it.
-	if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	if _, _, err := h.signIn(Credentials{
 		Email:     rosa.Email,
 		Password:  testPassword,
 		ClientKey: "198.51.100.7",
@@ -188,7 +188,7 @@ func TestRepeatedGuessingIsLockedOut(t *testing.T) {
 	// Once the window has passed, they are let back in. A lockout that never
 	// lifts is a denial of service anybody can aim at anybody.
 	h.clock.Advance(signInWindow + time.Minute)
-	if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	if _, _, err := h.signIn(Credentials{
 		Email:     rosa.Email,
 		Password:  testPassword,
 		ClientKey: "198.51.100.7",
@@ -204,7 +204,7 @@ func TestSuspendedAccountsCannotSignIn(t *testing.T) {
 	rosa := h.member("rosa")
 	support := h.account("help-desk", domain.RoleSupport, 1985)
 
-	if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	if _, _, err := h.signIn(Credentials{
 		Email:    rosa.Email,
 		Password: testPassword,
 	}); err != nil {
@@ -214,7 +214,7 @@ func TestSuspendedAccountsCannotSignIn(t *testing.T) {
 	if err := h.svc.Support.Suspend(h.ctx, support, rosa.ID, "reported"); err != nil {
 		t.Fatalf("suspend: %v", err)
 	}
-	if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	if _, _, err := h.signIn(Credentials{
 		Email:    rosa.Email,
 		Password: testPassword,
 	}); err == nil {
@@ -224,7 +224,7 @@ func TestSuspendedAccountsCannotSignIn(t *testing.T) {
 	if err := h.svc.Support.Restore(h.ctx, support, rosa.ID, "sorted out"); err != nil {
 		t.Fatalf("restore: %v", err)
 	}
-	if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	if _, _, err := h.signIn(Credentials{
 		Email:    rosa.Email,
 		Password: testPassword,
 	}); err != nil {
@@ -239,7 +239,7 @@ func TestSuspendingClosesEverySession(t *testing.T) {
 	rosa := h.member("rosa")
 	support := h.account("help-desk", domain.RoleSupport, 1985)
 
-	_, token, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	_, token, err := h.signIn(Credentials{
 		Email:    rosa.Email,
 		Password: testPassword,
 	})
@@ -268,13 +268,13 @@ func TestChangingAPasswordClosesEverySession(t *testing.T) {
 
 	rosa := h.member("rosa")
 
-	_, phone, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	_, phone, err := h.signIn(Credentials{
 		Email: rosa.Email, Password: testPassword, UserAgent: "phone",
 	})
 	if err != nil {
 		t.Fatalf("sign in on the phone: %v", err)
 	}
-	_, laptop, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	_, laptop, err := h.signIn(Credentials{
 		Email: rosa.Email, Password: testPassword, UserAgent: "laptop",
 	})
 	if err != nil {
@@ -293,7 +293,7 @@ func TestChangingAPasswordClosesEverySession(t *testing.T) {
 		}
 	}
 
-	if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	if _, _, err := h.signIn(Credentials{
 		Email: rosa.Email, Password: "a-brand-new-passphrase",
 	}); err != nil {
 		t.Errorf("cannot sign in with the new password: %v", err)
@@ -309,7 +309,7 @@ func TestChangingAPasswordNeedsTheCurrentOne(t *testing.T) {
 	if err == nil {
 		t.Fatal("the password was changed without the current one")
 	}
-	if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	if _, _, err := h.signIn(Credentials{
 		Email: rosa.Email, Password: testPassword,
 	}); err != nil {
 		t.Errorf("the original password stopped working: %v", err)
@@ -337,7 +337,7 @@ func TestSessionsExpire(t *testing.T) {
 	h := newHarness(t)
 
 	rosa := h.member("rosa")
-	_, token, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	_, token, err := h.signIn(Credentials{
 		Email: rosa.Email, Password: testPassword,
 	})
 	if err != nil {
@@ -346,7 +346,7 @@ func TestSessionsExpire(t *testing.T) {
 
 	// A second session that is never used again, to show the sweeper does its
 	// job. The first one cleans itself up when the failed request goes past.
-	if _, _, err := h.svc.Accounts.SignIn(h.ctx, Credentials{
+	if _, _, err := h.signIn(Credentials{
 		Email: rosa.Email, Password: testPassword, UserAgent: "an old phone",
 	}); err != nil {
 		t.Fatalf("second sign in: %v", err)
@@ -360,12 +360,12 @@ func TestSessionsExpire(t *testing.T) {
 	// Housekeeping deletes what nobody came back for, rather than leaving a
 	// growing pile of dead sessions to be leaked later. Data you do not hold
 	// cannot leak.
-	sessions, _, err := h.svc.Accounts.PurgeExpired(h.ctx)
+	swept, err := h.svc.Accounts.PurgeExpired(h.ctx)
 	if err != nil {
 		t.Fatalf("purge: %v", err)
 	}
-	if sessions != 1 {
-		t.Errorf("purged %d sessions, want the one nobody came back for", sessions)
+	if swept.Sessions != 1 {
+		t.Errorf("purged %d sessions, want the one nobody came back for", swept.Sessions)
 	}
 }
 
@@ -374,11 +374,11 @@ func TestSigningOutEverywhereClosesEverySession(t *testing.T) {
 	h := newHarness(t)
 
 	rosa := h.member("rosa")
-	_, first, err := h.svc.Accounts.SignIn(h.ctx, Credentials{Email: rosa.Email, Password: testPassword})
+	_, first, err := h.signIn(Credentials{Email: rosa.Email, Password: testPassword})
 	if err != nil {
 		t.Fatalf("sign in: %v", err)
 	}
-	_, second, err := h.svc.Accounts.SignIn(h.ctx, Credentials{Email: rosa.Email, Password: testPassword})
+	_, second, err := h.signIn(Credentials{Email: rosa.Email, Password: testPassword})
 	if err != nil {
 		t.Fatalf("sign in again: %v", err)
 	}
@@ -398,7 +398,7 @@ func TestASessionTokenIsNotRecoverableFromStorage(t *testing.T) {
 	h := newHarness(t)
 
 	rosa := h.member("rosa")
-	_, token, err := h.svc.Accounts.SignIn(h.ctx, Credentials{Email: rosa.Email, Password: testPassword})
+	_, token, err := h.signIn(Credentials{Email: rosa.Email, Password: testPassword})
 	if err != nil {
 		t.Fatalf("sign in: %v", err)
 	}

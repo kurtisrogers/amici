@@ -39,8 +39,16 @@ fixtures that hide validation bugs.
 | `bruno` | member | A stranger to Rosa in both directions. Use to check a non-friend sees nothing |
 | `sofia` | member | Fifteen. Cannot be reached by email at all; her codes expire in four hours |
 | `quiet` | member | An adult who switched off email requests. A request to them must silently go nowhere |
+| `nuovo` | member | Registered and never confirmed her address. Sees the banner, cannot be reached at `pia@example.test`, cannot reset her password |
 | `help-desk` | support | Can look accounts up and suspend them, and cannot read a single post |
 | `dev` | developer | Sees diagnostics and the audit trail, and no member content |
+
+Every other fixture address is marked confirmed, which is the only honest
+option: their addresses do not exist, so nobody can follow a link to prove
+they can read one, and leaving them unconfirmed would produce a development
+world in which no member can be reached by the route most of Amici's rules are
+about. Pia is the exception because the unconfirmed path needs somebody to
+happen to.
 
 The world is shaped around the rules worth exercising: a friendship, a pending
 request in each direction, a block, a young member, an opted-out member, an

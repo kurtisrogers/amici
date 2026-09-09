@@ -16,7 +16,11 @@ type settingsPage struct {
 	YoungMember  bool
 	BioMaxLength int
 	PasswordMin  int
-	AuditTrail   []domain.AuditEvent
+	// RecoveryCodesLeft is only meaningful when a second factor is on, and it
+	// is shown so that somebody running low finds out at the moment they are
+	// looking at the setting rather than the moment they need a code.
+	RecoveryCodesLeft int
+	AuditTrail        []domain.AuditEvent
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -25,6 +29,15 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		YoungMember:  viewer.IsYoungMember(s.services.Accounts.Now()),
 		BioMaxLength: 280,
 		PasswordMin:  security.PasswordMinLen,
+	}
+
+	if viewer.TwoFactorEnabled() {
+		left, err := s.services.Accounts.RecoveryCodesLeft(r.Context(), viewer)
+		if err != nil {
+			s.log.Warn("could not count recovery codes", "error", err)
+		} else {
+			data.RecoveryCodesLeft = left
+		}
 	}
 
 	// An account with power over other accounts can see the record its own

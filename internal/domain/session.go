@@ -55,6 +55,25 @@ const (
 	// access. It is only ever written by the amiciadmin command, because
 	// there is no screen anywhere in Amici that can hand out power.
 	AuditRoleChanged = "account.role.changed"
+
+	// The email and second factor trail. These are the events a member wants
+	// to be able to point at when something has happened to their account, so
+	// they are recorded against the member as actor rather than only when
+	// support is involved.
+	AuditEmailConfirmed         = "account.email.confirmed"
+	AuditEmailChanged           = "account.email.changed"
+	AuditPasswordResetRequested = "account.password.reset.requested"
+	AuditPasswordReset          = "account.password.reset"
+	AuditTwoFactorEnabled       = "account.twofactor.enabled"
+	AuditTwoFactorDisabled      = "account.twofactor.disabled"
+	AuditRecoveryCodesIssued    = "account.recovery.issued"
+	AuditRecoveryCodeUsed       = "account.recovery.used"
+	AuditAccountClosed          = "account.closed"
+	AuditAccountReopened        = "account.reopened"
+	// AuditAccountPurged records an account being deleted for good once its
+	// grace period ran out. The actor is the account itself: nobody at Amici
+	// decided this, the member did, thirty days earlier.
+	AuditAccountPurged = "account.purged"
 )
 
 // ReportState is the triage lifecycle of a member report.

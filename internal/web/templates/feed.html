@@ -20,7 +20,7 @@
 
   {{with .Data.Page.NextCursor}}
     <p class="amici-btn-row">
-      <a href="/feed?before={{.}}" role="button" class="secondary outline">Older posts</a>
+      <a href="/feed?before={{.}}" class="amici-cta amici-cta--quiet">Older posts</a>
     </p>
   {{end}}
 
@@ -43,8 +43,8 @@
       give somebody a request code.
     </p>
     <p class="amici-btn-row amici-btn-row--centred">
-      <a href="/friends" role="button">Bring somebody in</a>
-      <a href="/settings/canvas" role="button" class="secondary outline">Decorate your page</a>
+      <a href="/friends" class="amici-cta">Bring somebody in</a>
+      <a href="/settings/canvas" class="amici-cta amici-cta--quiet">Decorate your page</a>
     </p>
   </div>
 {{end}}

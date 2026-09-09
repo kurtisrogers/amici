@@ -89,10 +89,12 @@ test("a new member is pointed at how to bring somebody in", async ({ page }) => 
   await page.goto("/feed");
   await expect(page.getByText(/It is just you in here so far/)).toBeVisible();
   await expect(page.getByText(/no way to suggest people to you/)).toBeVisible();
-  // A button by role, not a link: PicoCSS styles a call to action by putting
-  // role="button" on the anchor, which is what the accessibility tree then
-  // reports. docs/frontend.md records that trade-off.
-  await page.getByRole("button", { name: "Bring somebody in" }).click();
+  // A link by role, because that is what it is. This used to be asserted as a
+  // button, because PicoCSS styles a call to action by putting role="button"
+  // on the anchor and the accessibility tree believed it. Amici styles it with
+  // a class instead, so a screen reader now announces a link that goes
+  // somewhere rather than a button that does something.
+  await page.getByRole("link", { name: "Bring somebody in" }).click();
   await expect(page).toHaveURL(/\/friends$/);
 });
 

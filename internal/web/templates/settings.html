@@ -63,8 +63,8 @@
       you.
     </p>
     <p class="amici-btn-row">
-      <a href="/settings/canvas" role="button">Edit your page</a>
-      <a href="/u/{{.Viewer.Handle}}" role="button" class="secondary outline">See it</a>
+      <a href="/settings/canvas" class="amici-cta">Edit your page</a>
+      <a href="/u/{{.Viewer.Handle}}" class="amici-cta amici-cta--quiet">See it</a>
     </p>
   </section>
 
@@ -84,6 +84,111 @@
       </small>
       <button type="submit">Change my password</button>
     </form>
+  </section>
+</div>
+
+<div class="amici-columns">
+  <section class="amici-card">
+    <h2>Your email address</h2>
+    {{if .Viewer.EmailConfirmed}}
+      <p>
+        <strong>{{.Viewer.Email}}</strong>, confirmed. This is how a friend who
+        knows it can reach you, and how you get back in if you forget your
+        password. We use it for nothing else.
+      </p>
+    {{else}}
+      <p>
+        <strong>{{.Viewer.Email}}</strong>, not confirmed yet. Until it is,
+        nobody can reach you by typing it in, and you cannot reset your
+        password.
+      </p>
+      <form method="post" action="/settings/email/resend" class="amici-inline-form">
+        {{template "csrf" .CSRF}}
+        <button type="submit" class="secondary">Send me another link</button>
+      </form>
+    {{end}}
+
+    {{with .PendingEmail}}
+      <div class="amici-flash amici-flash--warn" role="status">
+        <p>Waiting for <strong>{{.}}</strong> to be confirmed.</p>
+        <p>Your account stays where it is until then.</p>
+      </div>
+      <form method="post" action="/settings/email/cancel" class="amici-inline-form">
+        {{template "csrf" $.CSRF}}
+        <button type="submit" class="secondary outline amici-btn-small">Never mind, keep my old address</button>
+      </form>
+    {{end}}
+
+    <details>
+      <summary>Move to a different address</summary>
+      <form method="post" action="/settings/email">
+        {{template "csrf" .CSRF}}
+        <label for="new_email">New email address</label>
+        <input type="email" id="new_email" name="email" autocomplete="email" required>
+        <label for="email_password">Your password</label>
+        <input type="password" id="email_password" name="current_password"
+          autocomplete="current-password" required>
+        <small>
+          We send a link to the new address and change nothing until you follow
+          it, so a typo cannot lock you out.
+        </small>
+        <button type="submit">Send a confirmation link</button>
+      </form>
+    </details>
+  </section>
+
+  <section class="amici-card">
+    <h2>A second step when you sign in</h2>
+    {{if .Viewer.TwoFactorEnabled}}
+      <p>
+        On. Signing in needs a code from your authenticator app as well as your
+        password.
+      </p>
+      <p class="amici-meta">
+        {{.Data.RecoveryCodesLeft}}
+        {{pluralise .Data.RecoveryCodesLeft "recovery code" "recovery codes"}}
+        left.
+      </p>
+
+      <details>
+        <summary>Make a new set of recovery codes</summary>
+        <form method="post" action="/settings/two-factor/recovery-codes">
+          {{template "csrf" .CSRF}}
+          <label for="codes_password">Your password</label>
+          <input type="password" id="codes_password" name="current_password"
+            autocomplete="current-password" required>
+          <small>The set you have now stops working.</small>
+          <button type="submit">Show me a new set</button>
+        </form>
+      </details>
+
+      <details>
+        <summary>Turn the second step off</summary>
+        <form method="post" action="/settings/two-factor/disable">
+          {{template "csrf" .CSRF}}
+          <label for="disable_password">Your password</label>
+          <input type="password" id="disable_password" name="current_password"
+            autocomplete="current-password" required>
+          <small>Your recovery codes stop working too.</small>
+          <button type="submit" class="secondary outline">Turn it off</button>
+        </form>
+      </details>
+    {{else}}
+      <p>
+        Off. Your password is the only thing between somebody else and your
+        account.
+      </p>
+      <p class="amici-meta">
+        Turning this on means an authenticator app on your phone. We do not
+        offer codes by text message: a phone number is one of the easiest
+        things to take off somebody by talking to their network, and handing
+        one to a text-message company would mean handing your number to a
+        company you never chose.
+      </p>
+      <p class="amici-btn-row">
+        <a href="/settings/two-factor" class="amici-cta">Set up a second step</a>
+      </p>
+    {{end}}
   </section>
 </div>
 
@@ -107,6 +212,12 @@
     <li>Kind of account: <strong>{{.Viewer.Role.Label}}</strong></li>
     <li>Here since {{niceDate .Viewer.CreatedAt}}</li>
   </ul>
+
+  <p class="amici-meta">
+    Leaving should be as easy as arriving, so it is a link on this page rather
+    than an email you have to write.
+  </p>
+  <p><a href="/settings/close">Close my account</a></p>
 </section>
 
 {{if .Privileged}}

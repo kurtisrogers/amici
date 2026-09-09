@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -42,9 +41,10 @@ var (
 	ErrHashFormat = errors.New("password hash is malformed")
 )
 
-// obviousPasswords are rejected outright. This is not a substitute for a
-// breach corpus check, which belongs behind a proper k-anonymity API; it just
-// stops the very worst choices at registration.
+// obviousPasswords are Amici-specific choices, folded into the embedded
+// breach corpus at load. A corpus taken from other people's breaches cannot
+// know that "amiciamici" is a bad idea here, because Amici has not had a
+// breach to appear in.
 var obviousPasswords = map[string]bool{
 	"password":     true,
 	"password1":    true,
@@ -60,20 +60,6 @@ var obviousPasswords = map[string]bool{
 	"welcome123":   true,
 	"adminadmin":   true,
 	"passwordpass": true,
-}
-
-// ValidatePassword applies Amici's password policy.
-func ValidatePassword(p string) error {
-	if utf8.RuneCountInString(p) < PasswordMinLen {
-		return ErrPasswordTooShort
-	}
-	if len(p) > PasswordMaxLen {
-		return ErrPasswordTooLong
-	}
-	if obviousPasswords[strings.ToLower(strings.TrimSpace(p))] {
-		return errors.New("that password is one of the most commonly guessed ones, please pick another")
-	}
-	return nil
 }
 
 // HashPassword derives an Argon2id hash with a fresh random salt. The result

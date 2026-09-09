@@ -40,10 +40,17 @@ internal/domain                             entities, validation, ports
 internal/store/sqlite                       one implementation of the ports
 ```
 
-Alongside those: `internal/security` (password hashing, tokens) and
-`internal/security/canvas` (the profile sanitiser), both leaf packages;
-`internal/brand` (name, voice, colourways); `internal/config`; and
-`internal/fixtures`.
+Alongside those: `internal/security` (password hashing, tokens, the second
+factor) and `internal/security/canvas` (the profile sanitiser), both leaf
+packages; `internal/mail`, which is a `Sender` interface and three
+implementations and knows nothing about what a message says; `internal/brand`
+(name, voice, colourways); `internal/config`; and `internal/fixtures`.
+
+`internal/mail` is a port in the same sense as the store, and for the same
+reason. The service layer composes the four messages Amici sends and hands
+them to a `Sender`; whether that is an SMTP server, an in-memory outbox the
+browser tests read, or a sender that loudly refuses, is a wiring decision made
+once in `cmd/amici`.
 
 ### internal/domain
 
@@ -156,16 +163,25 @@ handled.
 
 ## Things left undone
 
-Recorded honestly rather than discovered later:
+Recorded honestly rather than discovered later. What is queued, and roughly in
+what order, is in [docs/roadmap.md](roadmap.md); the security-specific gaps are
+listed at the end of [docs/security.md](security.md).
 
-- **No email delivery.** Registration does not confirm the address, and a
-  friend request by email is not announced to the recipient by email — it
-  simply appears on their friends page next time they look. Wiring an outbound
-  mailer is the obvious next job, and `docs/security.md` says what it changes.
-- **No password reset**, which follows from the above.
-- **The rate limiter is in-process.** Fine for one instance; running two would
-  give each its own counters. The limits that matter most — friend requests
-  per day — are counted in the database and so hold regardless.
+- **A friend request is not announced by email.** It appears on the
+  recipient's friends page next time they look. Now that there is a mailer
+  this is a choice rather than a limitation, and it is the one place where the
+  "we only send four messages" rule costs a member something real: a request
+  can sit unseen for as long as somebody goes without signing in.
+- **Nothing runs in more than one process.** The rate limit counters moved to
+  the database, so the arithmetic would survive a second instance, but SQLite
+  with a local file would not. Running two of these means moving the store
+  first, which is what the ports are for.
 - **No pagination on the friends page or the support console.** The feed is
   paginated; those two are not, on the assumption that a person has friends
-  rather than followers.
+  rather than followers. The support console is the one that will break first,
+  because its list grows with the whole service rather than with one household.
+- **Housekeeping is a timer in the process** rather than a job with its own
+  lifecycle. It sweeps expired sessions, spent tokens, dead rate limit
+  counters and accounts past their grace period. If the process is never up
+  long enough to fire it, none of that happens, and the closure sweep is the
+  one where "did not run" is a broken promise rather than untidiness.

@@ -20,6 +20,7 @@ import (
 
 	"github.com/kurtisrogers/amici/internal/config"
 	"github.com/kurtisrogers/amici/internal/fixtures"
+	"github.com/kurtisrogers/amici/internal/mail"
 	"github.com/kurtisrogers/amici/internal/service"
 )
 
@@ -43,6 +44,10 @@ type Options struct {
 	// fixture routes are not registered at all, so there is no handler to
 	// reach even if the config flag were somehow wrong.
 	LoadFixtures LoadFixtures
+	// Outbox is the development mail sender, when one is in use. It is nil in
+	// any deployment sending real mail, and the endpoint that reads it is
+	// registered on the same terms as the fixture routes.
+	Outbox *mail.Outbox
 }
 
 // Server holds everything an HTTP handler needs.
@@ -54,6 +59,7 @@ type Server struct {
 	static       http.Handler
 	handler      http.Handler
 	loadFixtures LoadFixtures
+	outbox       *mail.Outbox
 }
 
 // New builds the server and parses templates. Templates are parsed once at
@@ -83,6 +89,7 @@ func New(opts Options) (*Server, error) {
 		log:          log,
 		templates:    tpl,
 		loadFixtures: opts.LoadFixtures,
+		outbox:       opts.Outbox,
 	}
 	s.static = s.staticHandler(sub)
 	s.handler = s.routes()
@@ -183,13 +190,16 @@ func (s *Server) housekeep(ctx context.Context) {
 	for {
 		// Run once at startup as well, so a long-stopped instance tidies up
 		// as soon as it comes back rather than an hour later.
-		sessions, invites, err := s.services.Accounts.PurgeExpired(ctx)
+		swept, err := s.services.Accounts.PurgeExpired(ctx)
 		if err != nil {
 			s.log.Warn("housekeeping failed", "error", err)
-		} else if sessions > 0 || invites > 0 {
+		} else if swept.Any() {
 			s.log.Info("housekeeping",
-				slog.Int("expired_sessions_removed", sessions),
-				slog.Int("spent_invites_removed", invites),
+				slog.Int("expired_sessions_removed", swept.Sessions),
+				slog.Int("spent_invites_removed", swept.Invites),
+				slog.Int("spent_links_removed", swept.Tokens),
+				slog.Int("rate_limit_windows_removed", swept.RateLimits),
+				slog.Int("closed_accounts_deleted", swept.AccountsDeleted),
 			)
 		}
 		select {

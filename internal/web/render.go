@@ -53,6 +53,25 @@ func (p *page) ShowDeveloperConsole() bool {
 	return p.Viewer != nil && p.Viewer.Role.Can(domain.CapViewDiagnostics)
 }
 
+// NeedsEmailConfirmation reports whether the header should carry a standing
+// reminder to confirm the address on the account.
+//
+// It is a banner rather than a wall. The one thing an unconfirmed address
+// costs is being reachable by email, and the reminder says so, so a member who
+// never wants to be reachable that way can simply ignore it forever and
+// nothing about Amici stops working for them.
+func (p *page) NeedsEmailConfirmation() bool {
+	return p.Viewer != nil && !p.Viewer.EmailConfirmed()
+}
+
+// PendingEmail is the address a member has asked to move to, if any.
+func (p *page) PendingEmail() string {
+	if p.Viewer == nil {
+		return ""
+	}
+	return p.Viewer.PendingEmail
+}
+
 // Privileged reports whether the viewer holds power over other accounts,
 // which is what the settings page uses to decide whether to show somebody
 // their own audit trail.

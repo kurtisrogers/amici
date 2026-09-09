@@ -1,0 +1,30 @@
+{{template "head" .}}
+
+<div class="amici-narrow">
+  <h1>Your recovery codes</h1>
+
+  <div class="amici-flash amici-flash--warn" role="alert">
+    <p>This is the only time these will be shown. Write them down now.</p>
+    <p>
+      We keep only a scrambled form of them, so we genuinely cannot show them
+      to you again, and nobody at {{.Brand.Name}} can read them either.
+    </p>
+  </div>
+
+  <div class="amici-card">
+    <p>
+      Each code works once, and any of them gets you in without your phone.
+      Keep them somewhere a burglar would not look and a fire would not reach:
+      the back of a drawer is fine, a note on your phone is not.
+    </p>
+    <ul class="amici-codes">
+      {{range .Data.Codes}}<li class="amici-code">{{.}}</li>{{end}}
+    </ul>
+  </div>
+
+  <p class="amici-btn-row">
+    <a href="/settings" class="amici-cta">I have written them down</a>
+  </p>
+</div>
+
+{{template "foot" .}}

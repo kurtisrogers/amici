@@ -152,8 +152,51 @@ type Account struct {
 	// forced off for young members.
 	ReachableByEmail bool
 	CanvasDisabled   bool
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// EmailConfirmedAt records when the member proved they can read the
+	// address on the account. Until they have, nobody can reach them through
+	// it: see AcceptsEmailRequests.
+	EmailConfirmedAt *time.Time
+	// PendingEmail is an address that has been asked for but not yet
+	// confirmed. The account keeps working on the old address until the new
+	// one answers, so a typo cannot lock anybody out.
+	PendingEmail string
+	// TOTPSecret is the shared secret for the authenticator app, stored in
+	// its base32 form. It is only meaningful once TOTPConfirmedAt is set:
+	// enrolment mints a secret and then waits for a correct code, so a member
+	// who abandons the setup screen has not accidentally locked themselves
+	// out of their own account.
+	TOTPSecret      string
+	TOTPConfirmedAt *time.Time
+	// ClosedAt is when the member closed their own account, which starts the
+	// grace period before it is deleted for good.
+	ClosedAt  *time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// EmailConfirmed reports whether the address on the account has been proved.
+func (a *Account) EmailConfirmed() bool { return a.EmailConfirmedAt != nil }
+
+// TwoFactorEnabled reports whether sign-in needs a code as well as a password.
+func (a *Account) TwoFactorEnabled() bool { return a.TOTPConfirmedAt != nil }
+
+// ClosureGracePeriod is how long a closed account is kept before it is deleted
+// for good.
+//
+// It exists for one reason: people close accounts in a bad moment. Signing in
+// during the window reopens the account with everything intact, and after it
+// the rows are gone, including the posts, the friendships and the address. A
+// closure that quietly kept your data forever would not be a closure, and one
+// that took effect instantly would make a moment of upset permanent.
+const ClosureGracePeriod = 30 * 24 * time.Hour
+
+// Reopenable reports whether a closed account is still inside its grace
+// period and can be brought back by its owner signing in.
+func (a *Account) Reopenable(now time.Time) bool {
+	if a.Status != StatusDeactivated || a.ClosedAt == nil {
+		return false
+	}
+	return now.Before(a.ClosedAt.Add(ClosureGracePeriod))
 }
 
 // AgeAt returns the account holder's age in whole years at the given instant.
@@ -168,6 +211,14 @@ func (a *Account) IsYoungMember(now time.Time) bool { return a.AgeAt(now) < Adul
 // account's email address may be delivered.
 func (a *Account) AcceptsEmailRequests(now time.Time) bool {
 	if a.Status != StatusActive {
+		return false
+	}
+	// An unconfirmed address is not this member's address as far as Amici is
+	// concerned. Without this check, registering with somebody else's email
+	// would quietly divert the friend requests meant for them: they would
+	// never know, and the sender would have no way to tell. Confirmation is
+	// what makes the email route mean what it says.
+	if !a.EmailConfirmed() {
 		return false
 	}
 	if a.IsYoungMember(now) {

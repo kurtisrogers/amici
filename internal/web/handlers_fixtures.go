@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/kurtisrogers/amici/internal/fixtures"
 )
@@ -34,6 +35,7 @@ type personInfo struct {
 	Email            string `json:"email"`
 	Role             string `json:"role"`
 	ReachableByEmail bool   `json:"reachable_by_email"`
+	EmailConfirmed   bool   `json:"email_confirmed"`
 	Note             string `json:"note"`
 }
 
@@ -54,7 +56,15 @@ func (s *Server) handleFixturesReset(w http.ResponseWriter, r *http.Request) {
 	// The rate limit counters are part of the world being rebuilt. Some are
 	// keyed on client address, so they would otherwise carry one caller's
 	// attempts across every reset for the life of the process.
-	s.services.ForgetRateLimits()
+	if err := s.services.ForgetRateLimits(r.Context()); err != nil {
+		s.log.Warn("could not clear rate limits on reset", "error", err)
+	}
+
+	// So is the outbox. One spec's confirmation link showing up in the next
+	// spec's inbox would make a test that passes for the wrong reason.
+	if s.outbox != nil {
+		s.outbox.Forget()
+	}
 
 	resp := fixturesResponse{
 		OK:          true,
@@ -80,6 +90,44 @@ func (s *Server) handleFixturesInfo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// outboxMessage is one message the development sender accepted.
+type outboxMessage struct {
+	To      string `json:"to"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
+	At      string `json:"at"`
+}
+
+// handleFixturesOutbox lists the messages Amici would have sent.
+//
+// This is how the browser suite follows a confirmation or reset link: there is
+// no mail server in front of a test, and stubbing the flow out at the service
+// boundary would mean the thing being tested was not the thing that runs. So
+// the development sender records instead of delivering, and this reads it
+// back.
+//
+// It is registered on the same terms as the reset endpoint, which is to say
+// only when fixtures are enabled, which production refuses. Worth saying
+// plainly: this endpoint hands out password reset links to anybody who asks,
+// so it existing anywhere real would be a complete authentication bypass.
+func (s *Server) handleFixturesOutbox(w http.ResponseWriter, r *http.Request) {
+	if s.outbox == nil {
+		writeJSON(w, http.StatusOK, []outboxMessage{})
+		return
+	}
+	delivered := s.outbox.Messages()
+	out := make([]outboxMessage, 0, len(delivered))
+	for _, m := range delivered {
+		out = append(out, outboxMessage{
+			To:      m.To,
+			Subject: m.Subject,
+			Body:    m.Body,
+			At:      m.At.Format(time.RFC3339),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func peopleInfo() []personInfo {
 	out := make([]personInfo, 0, len(fixtures.People))
 	for _, p := range fixtures.People {
@@ -89,6 +137,7 @@ func peopleInfo() []personInfo {
 			Email:            p.Email,
 			Role:             string(p.Role),
 			ReachableByEmail: p.ReachableByEmail,
+			EmailConfirmed:   !p.Unconfirmed,
 			Note:             p.Note,
 		})
 	}

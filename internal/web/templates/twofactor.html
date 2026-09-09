@@ -1,0 +1,45 @@
+{{template "head" .}}
+
+<div class="amici-narrow">
+  <h1>One more step</h1>
+  <p>
+    Hello {{.Data.DisplayName}}. Open your authenticator app and type the code
+    it is showing for {{.Brand.Name}}.
+  </p>
+
+  <form method="post" action="/signin/code" class="amici-card">
+    {{template "csrf" .CSRF}}
+
+    {{with .Data.Error}}
+      <div class="amici-flash amici-flash--bad" role="alert"><p>{{.}}</p></div>
+    {{end}}
+
+    <label for="code">Six digit code</label>
+    {{/* one-time-code lets a phone offer the code from the notification, and
+         inputmode brings up a number pad rather than a keyboard. */}}
+    <input type="text" id="code" name="code" autocomplete="one-time-code"
+      inputmode="numeric" autocapitalize="off" spellcheck="false" required autofocus>
+    <small>Or type one of your recovery codes instead.</small>
+
+    <button type="submit">Sign in</button>
+  </form>
+
+  {{if and .Data.RecoveryCodesLeft (lt .Data.RecoveryCodesLeft 3)}}
+    <div class="amici-flash amici-flash--warn" role="status">
+      <p>
+        You have {{.Data.RecoveryCodesLeft}}
+        {{pluralise .Data.RecoveryCodesLeft "recovery code" "recovery codes"}}
+        left. Once you are in, make a new set from your settings.
+      </p>
+    </div>
+  {{end}}
+
+  <p class="amici-meta">
+    Lost your phone and your codes? Nobody at {{.Brand.Name}} can let you past
+    this, and that is deliberate: support being able to would mean anybody who
+    could talk their way past support could too.
+  </p>
+  <p><a href="/signin">Start again</a></p>
+</div>
+
+{{template "foot" .}}

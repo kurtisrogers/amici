@@ -40,7 +40,7 @@ func (s *Server) handleSignInForm(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSignIn(w http.ResponseWriter, r *http.Request) {
 	email := r.PostFormValue("email")
-	acct, token, err := s.services.Accounts.SignIn(r.Context(), service.Credentials{
+	result, err := s.services.Accounts.SignIn(r.Context(), service.Credentials{
 		Email:     email,
 		Password:  r.PostFormValue("password"),
 		UserAgent: r.UserAgent(),
@@ -57,18 +57,7 @@ func (s *Server) handleSignIn(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, http.StatusUnauthorized, "signin.html", p)
 		return
 	}
-
-	if err := s.signIn(w, token); err != nil {
-		s.renderError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-	s.flashGood(w, "Welcome back, "+acct.DisplayName+".")
-
-	next := s.takeRedirect(w, r)
-	if next == "" {
-		next = "/feed"
-	}
-	http.Redirect(w, r, next, http.StatusSeeOther)
+	s.signInResult(w, r, result)
 }
 
 // signUpPage carries the sign-up form's state.
@@ -118,8 +107,17 @@ func (s *Server) handleSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sign straight in. Email confirmation is the obvious next step, and
-	// docs/security.md is honest about it being missing.
+	// Signed straight in, without waiting for the address to be confirmed.
+	//
+	// Holding somebody at the door until they have found the email would be
+	// the more orthodox choice, and it is the wrong one here. The thing
+	// confirmation protects is the email route into an account, and that route
+	// is closed until they confirm: AcceptsEmailRequests refuses an
+	// unconfirmed address, so an account registered with somebody else's
+	// address cannot receive the requests meant for its owner. Everything
+	// else — posting, invite codes, reading the feed — is theirs already, and
+	// blocking it would only teach people that the first thing Amici does is
+	// get in the way.
 	token, err := s.services.Accounts.ReopenSession(r.Context(), acct.ID, r.UserAgent())
 	if err != nil {
 		s.renderError(w, r, err, http.StatusInternalServerError)
@@ -132,6 +130,7 @@ func (s *Server) handleSignUp(w http.ResponseWriter, r *http.Request) {
 
 	s.flashGood(w,
 		"Welcome to Amici, "+acct.DisplayName+".",
+		"We have sent a message to "+acct.Email+". Following the link in it means a friend who knows your address can reach you, and that you can get back in if you forget your password.",
 		"Nobody can find you here by searching, which is the whole idea. To get started, share a request code with someone you know, or send them a request using an email address you already have.",
 	)
 	http.Redirect(w, r, "/friends", http.StatusSeeOther)

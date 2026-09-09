@@ -1,0 +1,54 @@
+{{template "head" .}}
+
+<div class="amici-narrow">
+{{if .Data.Sent}}
+  <h1>Check your email</h1>
+  <div class="amici-card">
+    <p>
+      If that address belongs to an {{.Brand.Name}} account, there is a link on
+      its way to it now. It works for an hour, and only once.
+    </p>
+    <p class="amici-meta">
+      {{/* Said out loud rather than left to be inferred. Somebody who typed a
+           friend's address in to see what happened should learn nothing, and
+           somebody whose own reset never arrives should understand why they
+           are not being told which of the two just occurred. */}}
+      We have deliberately not told you whether that address is on
+      {{.Brand.Name}}. A page that answered that question would be a way of
+      finding out who is here, and not being findable is the whole point of
+      this place.
+    </p>
+    <p><a href="/signin">Back to signing in</a></p>
+  </div>
+{{else}}
+  <h1>Forgotten password</h1>
+  <p>
+    Tell us the address on your account and we will send a link to it. It is
+    the only place we will send it.
+  </p>
+
+  <form method="post" action="/forgot-password" class="amici-card">
+    {{template "csrf" .CSRF}}
+
+    {{with .Data.Error}}
+      <div class="amici-flash amici-flash--bad" role="alert"><p>{{.}}</p></div>
+    {{end}}
+
+    <label for="email">Email address</label>
+    <input type="email" id="email" name="email" value="{{.Data.Email}}"
+      autocomplete="username" required autofocus>
+
+    <button type="submit">Send me a link</button>
+  </form>
+
+  <p class="amici-meta">
+    If you never confirmed your address, this will not work, and support cannot
+    do it for you either. That is not us being unhelpful: if support could hand
+    an account to whoever asked convincingly enough, so could anybody who
+    learned to ask the same way.
+  </p>
+  <p><a href="/signin">Back to signing in</a></p>
+{{end}}
+</div>
+
+{{template "foot" .}}

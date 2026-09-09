@@ -128,22 +128,29 @@ pull request. Both suites run on every pull request via GitHub Actions.
 | [docs/brand.md](docs/brand.md) | The name, the voice, the six colourways |
 | [docs/frontend.md](docs/frontend.md) | Templates, PicoCSS, and why there is no JavaScript |
 | [docs/development.md](docs/development.md) | Running it, the fixture cast, configuration, tests |
+| [docs/roadmap.md](docs/roadmap.md) | What is planned, and the longer list of what Amici refuses to build |
 
 ## Before running this for real
 
 Amici is a foundation, and honest about what is missing. The gaps are listed
-in full at the end of [docs/security.md](docs/security.md); these are the ones
-that need closing first.
+in full at the end of [docs/security.md](docs/security.md) and what is queued
+against them is in [docs/roadmap.md](docs/roadmap.md). These are the ones to
+deal with before anybody real signs up.
 
-- **No email delivery.** Registration does not confirm the address, so
-  somebody could register with an address they do not control and receive
-  friend requests intended for its real owner. This is the most important gap.
-- **No password reset**, which follows from the above.
-- **Set `AMICI_SECRET_KEY`.** Production refuses to start without it.
+- **Set `AMICI_SECRET_KEY`.** Production refuses to start without it. It keys
+  the HMAC over invite and recovery codes, and there is no rotation mechanism
+  yet, so changing it later invalidates every live code at once.
+- **Configure a mail server.** Production refuses to start without one, because
+  without it nobody can confirm an address or reset a password.
+- **Encrypt the volume.** The SQLite file is plain.
+- **Arrange backups, and restore one somewhere safe** to confirm the backup is
+  a backup rather than a belief.
 - **Change the address in `/.well-known/security.txt`.**
-- **The rate limiter is in-process.** Running two instances gives each its own
-  counters. The limit that matters most, friend requests per day, is counted in
-  the database and holds regardless.
+- **Run one instance.** The store is a local SQLite file, so a second instance
+  is not a scaling step, it is two different services.
+- **Somebody has to read the reports.** Members can report a post, a comment,
+  a canvas or an account, and those land in a queue that does nothing until a
+  person with support access looks at it.
 
 ## Licence
 

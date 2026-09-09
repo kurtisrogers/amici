@@ -1,0 +1,35 @@
+{{template "head" .}}
+
+<div class="amici-narrow">
+{{if .Data.IsChange}}
+  <h1>Move your account to this address</h1>
+  <p>
+    You asked to move your {{.Brand.Name}} account to
+    <strong>{{.Data.Address}}</strong>. Confirming it here makes the change.
+  </p>
+{{else}}
+  <h1>Confirm your address</h1>
+  <p>
+    This link was sent to <strong>{{.Data.Address}}</strong>. Confirming it
+    means a friend who knows that address can send you a request, and that you
+    can get back in if you ever forget your password.
+  </p>
+{{end}}
+
+  <form method="post" action="/confirm-email" class="amici-card">
+    {{template "csrf" .CSRF}}
+    <input type="hidden" name="token" value="{{.Data.Token}}">
+    <button type="submit">Yes, confirm this address</button>
+  </form>
+
+  <p class="amici-meta">
+    {{/* Why there is a button here at all, since a link could have done it:
+         mail providers fetch links before anybody reads them, and a
+         confirmation spent by a scanner would leave the member looking at a
+         used-up link. */}}
+    We ask you to press a button rather than doing this the moment the link is
+    opened, because mail providers often fetch links before you see them.
+  </p>
+</div>
+
+{{template "foot" .}}

@@ -31,8 +31,17 @@ export type Fixtures = {
     email: string;
     role: string;
     reachable_by_email: boolean;
+    email_confirmed: boolean;
     note: string;
   }>;
+};
+
+/** One message the development sender recorded instead of delivering. */
+export type OutboxMessage = {
+  to: string;
+  subject: string;
+  body: string;
+  at: string;
 };
 
 /**
@@ -69,6 +78,49 @@ export async function resetFixtures(request: APIRequestContext): Promise<Fixture
   const body = (await response.json()) as Fixtures;
   expect(body.ok).toBeTruthy();
   return body;
+}
+
+/**
+ * Wait for a message to arrive for an address, and return the newest one.
+ *
+ * There is no mail server in front of a test, so the development sender
+ * records instead of delivering and this reads it back. Deliberately no way to
+ * ask the application for a token directly: a spec that minted its own link
+ * would stop being able to tell you that the link in the email works.
+ */
+export async function waitForMessage(
+  request: APIRequestContext,
+  to: string,
+): Promise<OutboxMessage> {
+  let seen: OutboxMessage[] = [];
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const response = await request.get("/fixtures/outbox");
+    expect(response.ok(), `could not read the outbox: ${response.status()}`).toBeTruthy();
+    seen = (await response.json()) as OutboxMessage[];
+    const mine = seen.filter((m) => m.to.toLowerCase() === to.toLowerCase());
+    if (mine.length > 0) {
+      return mine[mine.length - 1];
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(
+    `nothing arrived for ${to}. The outbox holds: ${seen.map((m) => m.to).join(", ") || "nothing"}`,
+  );
+}
+
+/**
+ * Follow the link in the newest message sent to an address, which is what a
+ * person does when they open their inbox.
+ */
+export async function followLinkFor(
+  page: Page,
+  request: APIRequestContext,
+  to: string,
+): Promise<void> {
+  const message = await waitForMessage(request, to);
+  const match = message.body.match(/https?:\/\/\S*[?&]token=\S+/);
+  expect(match, `no link in the message to ${to}:\n${message.body}`).not.toBeNull();
+  await page.goto(match![0]);
 }
 
 /** Sign in through the form, and wait to land on the feed. */
@@ -110,9 +162,14 @@ export async function signUp(
   await expect(page).toHaveURL(/\/friends$/);
 }
 
-/** Sign out through the header, wherever the browser currently is. */
+/**
+ * Sign out through the header, wherever the browser currently is.
+ *
+ * Exact, because the settings page also offers "Sign out everywhere", and that
+ * one closes every session on the account rather than this one.
+ */
 export async function signOut(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL("/");
 }
 

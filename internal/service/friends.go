@@ -66,10 +66,10 @@ func (f *Friends) RequestByEmail(ctx context.Context, actor *domain.Account, in 
 	// The rate limits are the real defence for this route. Even a perfectly
 	// silent response is an oracle if you can ask ten thousand times and
 	// watch which addresses later show up as friends.
-	if !f.limiter.allow("friendreq:hour:"+string(actor.ID), emailRequestsPerHour, time.Hour) {
+	if !f.limiter.allow(ctx, "friendreq:hour:"+string(actor.ID), emailRequestsPerHour, time.Hour) {
 		return fmt.Errorf("%w: you have sent a lot of requests in the last hour. Please try again later", domain.ErrRateLimited)
 	}
-	if in.ClientKey != "" && !f.limiter.allow("friendreq:client:"+in.ClientKey, emailRequestsPerClientPerHour, time.Hour) {
+	if in.ClientKey != "" && !f.limiter.allow(ctx, "friendreq:client:"+in.ClientKey, emailRequestsPerClientPerHour, time.Hour) {
 		return fmt.Errorf("%w: too many requests from here. Please try again later", domain.ErrRateLimited)
 	}
 
@@ -278,10 +278,10 @@ func (f *Friends) RedeemInvite(ctx context.Context, actor *domain.Account, rawCo
 	if err := requireCapability(actor, domain.CapSendFriendRequests); err != nil {
 		return nil, err
 	}
-	if !f.limiter.allow("invite:account:"+string(actor.ID), inviteAttemptsPerAccount, inviteAttemptWindow) {
+	if !f.limiter.allow(ctx, "invite:account:"+string(actor.ID), inviteAttemptsPerAccount, inviteAttemptWindow) {
 		return nil, fmt.Errorf("%w: too many attempts at a request identifier. Please wait a while", domain.ErrRateLimited)
 	}
-	if clientKey != "" && !f.limiter.allow("invite:client:"+clientKey, inviteAttemptsPerClient, inviteAttemptWindow) {
+	if clientKey != "" && !f.limiter.allow(ctx, "invite:client:"+clientKey, inviteAttemptsPerClient, inviteAttemptWindow) {
 		return nil, fmt.Errorf("%w: too many attempts from here. Please wait a while", domain.ErrRateLimited)
 	}
 
