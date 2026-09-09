@@ -1,0 +1,47 @@
+{{template "head" .}}
+
+<div class="amici-narrow">
+  <h1>Add a second step</h1>
+  <p>
+    A second step means your password on its own is not enough to get into
+    your account. You will need an authenticator app: most phones have one
+    built in, and there are several free ones that work offline.
+  </p>
+
+  <div class="amici-card">
+    <h2>1. Add {{.Brand.Name}} to your app</h2>
+    <p>Type this secret into the app, or open the link below on the phone the app is on.</p>
+    <p class="amici-code" role="note">{{.Data.Secret}}</p>
+    <p class="amici-meta"><a href="{{.Data.URI}}">Open in an authenticator app</a></p>
+    <p class="amici-meta">
+      {{/* Honest about a missing convenience rather than quietly lacking it.
+           A QR code would mean either shipping an encoder or asking somebody
+           else to draw it, and the second would hand a third party a shared
+           secret. */}}
+      There is no QR code here yet. Drawing one would mean either building an
+      encoder or asking another website to draw it for us, and the second would
+      hand somebody else the secret this whole thing depends on.
+    </p>
+  </div>
+
+  <form method="post" action="/settings/two-factor" class="amici-card">
+    {{template "csrf" .CSRF}}
+    <h2>2. Prove it works</h2>
+    <p>Type the code your app is showing now. Nothing changes until you do.</p>
+
+    <label for="code">Six digit code</label>
+    <input type="text" id="code" name="code" autocomplete="one-time-code"
+      inputmode="numeric" autocapitalize="off" spellcheck="false" required autofocus>
+
+    <button type="submit">Turn on the second step</button>
+  </form>
+
+  <p class="amici-meta">
+    We wait for a working code on purpose. Switching this on before you had
+    proved the app was set up would be a way of locking yourself out of your
+    own account with a secret you never saved.
+  </p>
+  <p><a href="/settings">Back to settings</a></p>
+</div>
+
+{{template "foot" .}}

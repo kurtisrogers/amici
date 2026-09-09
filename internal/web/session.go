@@ -30,6 +30,17 @@ const (
 	// asked to sign in.
 	redirectCookieName    = "__Host-amici_next"
 	redirectCookieNameDev = "amici_next"
+
+	// challengeCookieName holds a sign-in that has passed the password step
+	// and is waiting for a second factor code.
+	//
+	// It is a separate cookie from the session on purpose, and it is not a
+	// session in any sense: nothing in the application accepts it as proof of
+	// who somebody is. All it can do is name a challenge row that expires in
+	// ten minutes, and the only handler that reads it is the one asking for
+	// the code.
+	challengeCookieName    = "__Host-amici_challenge"
+	challengeCookieNameDev = "amici_challenge"
 )
 
 // cookieName picks the __Host- prefixed name when cookies are Secure. The
@@ -56,6 +67,41 @@ func (s *Server) flashCookieName() string {
 
 func (s *Server) redirectCookieName() string {
 	return s.cookieName(redirectCookieName, redirectCookieNameDev)
+}
+
+func (s *Server) challengeCookieName() string {
+	return s.cookieName(challengeCookieName, challengeCookieNameDev)
+}
+
+// setChallengeCookie remembers a second factor challenge.
+//
+// The lifetime matches domain.TwoFactorTTL, so the cookie cannot outlive the
+// row it points at. There is no value in a browser holding a handle on a
+// challenge the database has already forgotten.
+func (s *Server) setChallengeCookie(w http.ResponseWriter, token string) {
+	s.setCookie(w, s.challengeCookieName(), token, int(domain.TwoFactorTTL.Seconds()), true)
+}
+
+// takeChallengeToken reads the challenge handle without clearing it, so a
+// member who mistypes a code can try again without going back to the password
+// form. The challenge itself counts the attempts.
+func (s *Server) takeChallengeToken(r *http.Request) string {
+	for _, name := range []string{challengeCookieName, challengeCookieNameDev} {
+		if c, err := r.Cookie(name); err == nil && c.Value != "" {
+			return c.Value
+		}
+	}
+	return ""
+}
+
+// clearChallengeCookie removes the challenge handle under both names.
+func (s *Server) clearChallengeCookie(w http.ResponseWriter) {
+	for _, name := range []string{challengeCookieName, challengeCookieNameDev} {
+		http.SetCookie(w, &http.Cookie{
+			Name: name, Value: "", Path: "/", MaxAge: -1,
+			SameSite: http.SameSiteLaxMode, Secure: s.cfg.SecureCookies, HttpOnly: true,
+		})
+	}
 }
 
 // sessionCookieValue reads the session token from either cookie name, so that

@@ -46,7 +46,7 @@ func (f *Feed) Post(ctx context.Context, actor *domain.Account, in NewPost) (*do
 	if err := requireCapability(actor, domain.CapPostContent); err != nil {
 		return nil, err
 	}
-	if !f.limiter.allow("post:"+string(actor.ID), postsPerHour, time.Hour) {
+	if !f.limiter.allow(ctx, "post:"+string(actor.ID), postsPerHour, time.Hour) {
 		return nil, fmt.Errorf("%w: that is a lot of posting. Take a breath and try again shortly", domain.ErrRateLimited)
 	}
 	body, err := domain.ValidatePostBody(in.Body)
@@ -274,7 +274,7 @@ func (f *Feed) Comment(ctx context.Context, actor *domain.Account, in NewComment
 	if err := requireCapability(actor, domain.CapPostContent); err != nil {
 		return nil, err
 	}
-	if !f.limiter.allow("comment:"+string(actor.ID), commentsPerHour, time.Hour) {
+	if !f.limiter.allow(ctx, "comment:"+string(actor.ID), commentsPerHour, time.Hour) {
 		return nil, fmt.Errorf("%w: that is a lot of comments. Please slow down a little", domain.ErrRateLimited)
 	}
 	body, err := domain.ValidateCommentBody(in.Body)

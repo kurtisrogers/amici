@@ -63,7 +63,32 @@ type Config struct {
 	// TrustProxyHeaders makes the server believe X-Forwarded-For. Only turn
 	// this on when something you control is actually in front.
 	TrustProxyHeaders bool
+
+	// Mail describes where confirmation and password reset messages go.
+	Mail MailConfig
 }
+
+// MailConfig is the delivery configuration for Amici's four transactional
+// messages.
+type MailConfig struct {
+	// SMTPAddr is host:port. When it is empty, outside production, messages
+	// are recorded in an in-memory outbox instead of being delivered.
+	SMTPAddr string
+	// From is the address messages come from.
+	From string
+	// Username and Password authenticate to the relay. Both empty sends
+	// unauthenticated, which is normal for a relay on localhost.
+	Username string
+	Password string
+	// AllowPlaintext permits delivery to a relay that does not offer
+	// STARTTLS. It has to be asked for, because the messages Amici sends are
+	// account recovery links and one read in transit is an account taken
+	// over.
+	AllowPlaintext bool
+}
+
+// Configured reports whether a real mail server is set up.
+func (m MailConfig) Configured() bool { return m.SMTPAddr != "" }
 
 // Load reads configuration from the environment and validates it.
 func Load() (*Config, error) {
@@ -125,7 +150,53 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	if err := cfg.loadMail(env); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// loadMail reads the mail configuration.
+//
+// Production must have a mail server. Without one, registration cannot confirm
+// an address and a forgotten password cannot be recovered, so an account is
+// unreachable in both directions and nothing says so: the member waits for an
+// email that was never going to arrive. Refusing to start is the honest
+// failure, and it happens once, at boot, rather than silently for every member
+// who signs up.
+func (c *Config) loadMail(env Environment) error {
+	c.Mail = MailConfig{
+		SMTPAddr: getenv("AMICI_SMTP_ADDR", ""),
+		From:     getenv("AMICI_MAIL_FROM", ""),
+		Username: os.Getenv("AMICI_SMTP_USERNAME"),
+		Password: os.Getenv("AMICI_SMTP_PASSWORD"),
+	}
+
+	var err error
+	if c.Mail.AllowPlaintext, err = getbool("AMICI_SMTP_ALLOW_PLAINTEXT", false); err != nil {
+		return err
+	}
+	if env == EnvProduction && c.Mail.AllowPlaintext {
+		// A relay on a loopback interface is a legitimate arrangement, but it
+		// is also indistinguishable from a misconfiguration from in here, and
+		// getting it wrong sends password reset links across a network in
+		// clear text. Terminate TLS in front of Amici instead.
+		return errors.New("AMICI_SMTP_ALLOW_PLAINTEXT cannot be enabled in production")
+	}
+
+	if env == EnvProduction {
+		if !c.Mail.Configured() {
+			return errors.New("AMICI_SMTP_ADDR must be set in production, or nobody can confirm an address or recover a password")
+		}
+		if c.Mail.From == "" {
+			return errors.New("AMICI_MAIL_FROM must be set in production")
+		}
+	}
+	if c.Mail.From == "" {
+		c.Mail.From = "amici@localhost"
+	}
+	return nil
 }
 
 // IsProduction reports whether this is the real thing.

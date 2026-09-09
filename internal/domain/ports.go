@@ -24,6 +24,18 @@ type AccountRepo interface {
 	// N+1 query per feed page.
 	AccountCards(ctx context.Context, ids []ID) (map[ID]AccountCard, error)
 	CountAccounts(ctx context.Context) (int, error)
+	// ClosedAccountsBefore finds accounts whose owner closed them long enough
+	// ago that the grace period has run out.
+	ClosedAccountsBefore(ctx context.Context, before time.Time, limit int) ([]ID, error)
+	// DeleteAccount removes an account and, through the schema's cascades,
+	// everything it owns.
+	//
+	// This is the only genuinely destructive method on the storage surface.
+	// It is here rather than behind a separate optional interface because
+	// deleting your own account on request is a member-facing feature, not an
+	// administrative escape hatch: no capability grants it, and the only
+	// callers are the closure flow and the sweeper that finishes the job.
+	DeleteAccount(ctx context.Context, id ID) error
 }
 
 // SessionRepo persists browser sessions.
@@ -34,6 +46,51 @@ type SessionRepo interface {
 	DeleteSession(ctx context.Context, id ID) error
 	DeleteSessionsForAccount(ctx context.Context, accountID ID) error
 	DeleteExpiredSessions(ctx context.Context, before time.Time) (int, error)
+}
+
+// TokenRepo persists the single-use secrets behind email confirmation,
+// password reset and the second factor.
+type TokenRepo interface {
+	CreateToken(ctx context.Context, t *AccountToken) error
+	// TokenByHash looks a token up by purpose as well as hash, so a token
+	// minted for one job cannot be redeemed for another.
+	TokenByHash(ctx context.Context, purpose TokenPurpose, hash string) (*AccountToken, error)
+	ConsumeToken(ctx context.Context, id ID, at time.Time) error
+	RecordTokenAttempt(ctx context.Context, id ID) (attempts int, err error)
+	// DeleteTokensForAccount drops every outstanding token of one purpose.
+	// Minting a new reset link invalidates the last one, and a completed
+	// password change invalidates every reset link in flight.
+	DeleteTokensForAccount(ctx context.Context, accountID ID, purpose TokenPurpose) error
+	CountTokensSince(ctx context.Context, accountID ID, purpose TokenPurpose, since time.Time) (int, error)
+	PurgeExpiredTokens(ctx context.Context, before time.Time) (int, error)
+}
+
+// RecoveryCodeRepo persists the printed codes that stand in for an
+// authenticator app when the phone is lost.
+type RecoveryCodeRepo interface {
+	ReplaceRecoveryCodes(ctx context.Context, accountID ID, codes []RecoveryCode) error
+	RecoveryCodeByHash(ctx context.Context, accountID ID, hash string) (*RecoveryCode, error)
+	UseRecoveryCode(ctx context.Context, id ID, at time.Time) error
+	CountUnusedRecoveryCodes(ctx context.Context, accountID ID) (int, error)
+	DeleteRecoveryCodes(ctx context.Context, accountID ID) error
+}
+
+// RateLimitRepo persists fixed-window counters.
+//
+// Counting in the database rather than in a map costs one small write on the
+// paths that are rationed, and buys two things worth more than that write:
+// counters that survive a restart, so a deploy is not a fresh budget for
+// whoever is guessing passwords, and counters that are shared, so a second
+// instance is a configuration change rather than a hole.
+type RateLimitRepo interface {
+	// IncrementRateLimit adds one to the window for key, creating or rolling
+	// it over as needed, and returns the count including this call.
+	IncrementRateLimit(ctx context.Context, key string, per time.Duration, now time.Time) (int, error)
+	// RateLimitCount reports the current count without recording anything.
+	RateLimitCount(ctx context.Context, key string, now time.Time) (int, error)
+	ClearRateLimit(ctx context.Context, key string) error
+	ClearAllRateLimits(ctx context.Context) error
+	PurgeExpiredRateLimits(ctx context.Context, before time.Time) (int, error)
 }
 
 // FriendRepo persists friendships, requests and blocks.
@@ -138,6 +195,9 @@ type ReportRepo interface {
 type Store interface {
 	AccountRepo
 	SessionRepo
+	TokenRepo
+	RecoveryCodeRepo
+	RateLimitRepo
 	FriendRepo
 	InviteRepo
 	PostRepo

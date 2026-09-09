@@ -20,6 +20,7 @@ import (
 	"github.com/kurtisrogers/amici/internal/config"
 	"github.com/kurtisrogers/amici/internal/domain"
 	"github.com/kurtisrogers/amici/internal/fixtures"
+	"github.com/kurtisrogers/amici/internal/mail"
 	"github.com/kurtisrogers/amici/internal/service"
 	"github.com/kurtisrogers/amici/internal/store/sqlite"
 	"github.com/kurtisrogers/amici/internal/web"
@@ -57,6 +58,11 @@ func run() error {
 		}
 	}()
 
+	sender, outbox, err := newMailer(cfg, log)
+	if err != nil {
+		return err
+	}
+
 	clock := domain.SystemClock{}
 	services := service.New(service.Deps{
 		Store:   store,
@@ -64,12 +70,14 @@ func run() error {
 		Logger:  log,
 		Secret:  cfg.SecretKey,
 		BaseURL: cfg.BaseURL,
+		Mailer:  sender,
 	})
 
 	opts := web.Options{
 		Config:   cfg,
 		Services: services,
 		Logger:   log,
+		Outbox:   outbox,
 	}
 
 	// The fixture loader is only handed over when the config allows it, and
@@ -93,6 +101,44 @@ func run() error {
 	}
 	log.Info("goodbye")
 	return nil
+}
+
+// newMailer picks a delivery mechanism.
+//
+// A configured SMTP relay is used wherever one is given. Without one, and only
+// outside production, messages are recorded in an in-memory outbox instead:
+// somebody running Amici on a laptop can follow a confirmation link straight
+// out of the server log, and the browser suite can read the same messages back
+// over an endpoint that only exists when fixtures do. config.Load will not let
+// production reach this branch, so a real deployment either has a mail server
+// or does not start.
+//
+// The outbox is returned separately from the Sender because the web layer needs
+// the concrete type to read it back, while the service layer only ever needs
+// something it can send through.
+func newMailer(cfg *config.Config, log *slog.Logger) (mail.Sender, *mail.Outbox, error) {
+	if cfg.Mail.Configured() {
+		sender, err := mail.NewSMTPSender(mail.SMTPConfig{
+			Addr:           cfg.Mail.SMTPAddr,
+			From:           cfg.Mail.From,
+			Username:       cfg.Mail.Username,
+			Password:       cfg.Mail.Password,
+			AllowPlaintext: cfg.Mail.AllowPlaintext,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		log.Info("mail will be delivered over SMTP",
+			slog.String("relay", cfg.Mail.SMTPAddr),
+			slog.String("from", cfg.Mail.From),
+		)
+		return sender, nil, nil
+	}
+
+	log.Warn("no mail server is configured: confirmation and password reset messages " +
+		"will be written to the log and kept in memory, not delivered")
+	outbox := mail.NewOutbox(log, 50)
+	return outbox, outbox, nil
 }
 
 // newLogger builds the structured logger.

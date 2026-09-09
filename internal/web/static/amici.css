@@ -464,7 +464,116 @@ body {
 }
 
 .amici-btn-row button,
-.amici-btn-row a[role="button"] { width: auto; margin: 0; }
+.amici-btn-row a.amici-cta { width: auto; margin: 0; }
+
+/* A link that looks like a button, without claiming to be one.
+ *
+ * Pico's convention for this is role="button" on an anchor, and Amici followed
+ * it everywhere until docs/frontend.md had to record the result as a known
+ * wart: a link that navigates was announced to a screen reader as a button,
+ * which tells a keyboard user that Space will activate it when only Enter
+ * does. The role is the one thing about an element that assistive technology
+ * has no way to second-guess, so lying in it is the one place a styling
+ * shortcut is not worth taking.
+ *
+ * So the styling is written out here instead. It is longer than role="button"
+ * by a dozen lines and every one of them is a property, not a behaviour: what
+ * these links do, and how they are announced, is what an anchor has always
+ * done. Everything is expressed in Pico's own custom properties, so a
+ * colourway still re-skins them.
+ */
+a.amici-cta {
+  display: inline-block;
+  padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
+  border: var(--pico-border-width) solid var(--pico-primary-border);
+  border-radius: var(--pico-border-radius);
+  background-color: var(--pico-primary-background);
+  color: var(--pico-primary-inverse);
+  font-weight: var(--pico-font-weight);
+  line-height: var(--pico-line-height);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--pico-transition),
+    border-color var(--pico-transition),
+    box-shadow var(--pico-transition);
+}
+
+a.amici-cta:hover,
+a.amici-cta:active {
+  background-color: var(--pico-primary-hover-background);
+  border-color: var(--pico-primary-hover-border);
+  color: var(--pico-primary-inverse);
+  text-decoration: none;
+}
+
+/* Pico's own focus ring, so keyboard focus looks the same on a call to action
+   as it does on the button next to it. */
+a.amici-cta:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--pico-outline-width) var(--pico-primary-focus);
+}
+
+/* The quiet variant, standing in for Pico's "secondary outline". */
+a.amici-cta--quiet {
+  background-color: transparent;
+  border-color: var(--pico-secondary-border);
+  color: var(--pico-secondary);
+}
+
+a.amici-cta--quiet:hover,
+a.amici-cta--quiet:active {
+  background-color: transparent;
+  border-color: var(--pico-secondary-hover-border);
+  color: var(--pico-secondary-hover);
+}
+
+a.amici-cta--small {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 999px;
+}
+
+/* Closing your own account is the one destructive thing a member can do to
+   themselves, and the button that does it should not look like Save. */
+button.amici-danger {
+  background-color: transparent;
+  border-color: #a63a3a;
+  color: #a63a3a;
+}
+
+button.amici-danger:hover,
+button.amici-danger:active {
+  background-color: #a63a3a;
+  border-color: #a63a3a;
+  color: #fff;
+}
+
+/* Secrets meant to be read off a screen and copied onto paper: a recovery
+   code, or the second factor secret. Monospaced and spaced out, because the
+   difference between an O and a 0 has to be visible. */
+.amici-code {
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  background: var(--amici-chip);
+  border-radius: var(--amici-radius-sm);
+  padding: 0.5rem 0.7rem;
+  display: inline-block;
+  margin: 0 0 0.4rem;
+}
+
+.amici-codes {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.4rem;
+}
+
+.amici-codes > li { list-style: none; }
 
 /* -------------------------------------------------------------- the notice */
 

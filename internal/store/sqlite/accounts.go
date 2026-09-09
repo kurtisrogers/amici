@@ -2,23 +2,28 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/kurtisrogers/amici/internal/domain"
 )
 
 const accountColumns = `id, handle, display_name, email, email_norm, password_hash,
 	role, status, birth_date, colourway, bio, reachable_by_email, canvas_disabled,
+	email_confirmed_at, pending_email, totp_secret, totp_confirmed_at, closed_at,
 	created_at, updated_at`
 
 // CreateAccount inserts a new account.
 func (s *Store) CreateAccount(ctx context.Context, a *domain.Account) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO accounts (`+accountColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(a.ID), a.Handle, a.DisplayName, a.Email, a.EmailNorm, a.PasswordHash,
 		string(a.Role), string(a.Status), a.BirthDate.String(), a.Colourway, a.Bio,
 		boolToInt(a.ReachableByEmail), boolToInt(a.CanvasDisabled),
+		nullTime(a.EmailConfirmedAt), a.PendingEmail, a.TOTPSecret,
+		nullTime(a.TOTPConfirmedAt), nullTime(a.ClosedAt),
 		formatTime(a.CreatedAt), formatTime(a.UpdatedAt),
 	)
 	return translate(err, "account")
@@ -62,15 +67,18 @@ type rowScanner interface {
 
 func scanAccount(row rowScanner) (*domain.Account, error) {
 	var (
-		a                   domain.Account
-		id, role, status    string
-		birth               string
-		reachable, disabled int
-		created, updated    string
+		a                        domain.Account
+		id, role, status         string
+		birth                    string
+		reachable, disabled      int
+		confirmed, totpConfirmed sql.NullString
+		closed                   sql.NullString
+		created, updated         string
 	)
 	if err := row.Scan(
 		&id, &a.Handle, &a.DisplayName, &a.Email, &a.EmailNorm, &a.PasswordHash,
 		&role, &status, &birth, &a.Colourway, &a.Bio, &reachable, &disabled,
+		&confirmed, &a.PendingEmail, &a.TOTPSecret, &totpConfirmed, &closed,
 		&created, &updated,
 	); err != nil {
 		return nil, err
@@ -84,6 +92,15 @@ func scanAccount(row rowScanner) (*domain.Account, error) {
 	var err error
 	if a.BirthDate, err = domain.ParseDate(birth); err != nil {
 		return nil, fmt.Errorf("account %s has an unreadable birth date: %w", id, err)
+	}
+	if a.EmailConfirmedAt, err = scanNullTime(confirmed); err != nil {
+		return nil, err
+	}
+	if a.TOTPConfirmedAt, err = scanNullTime(totpConfirmed); err != nil {
+		return nil, err
+	}
+	if a.ClosedAt, err = scanNullTime(closed); err != nil {
+		return nil, err
 	}
 	if a.CreatedAt, err = parseTime(created); err != nil {
 		return nil, err
@@ -101,11 +118,14 @@ func (s *Store) UpdateAccount(ctx context.Context, a *domain.Account) error {
 			handle = ?, display_name = ?, email = ?, email_norm = ?,
 			password_hash = ?, role = ?, status = ?, birth_date = ?,
 			colourway = ?, bio = ?, reachable_by_email = ?, canvas_disabled = ?,
-			updated_at = ?
+			email_confirmed_at = ?, pending_email = ?, totp_secret = ?,
+			totp_confirmed_at = ?, closed_at = ?, updated_at = ?
 		WHERE id = ?`,
 		a.Handle, a.DisplayName, a.Email, a.EmailNorm, a.PasswordHash,
 		string(a.Role), string(a.Status), a.BirthDate.String(), a.Colourway, a.Bio,
 		boolToInt(a.ReachableByEmail), boolToInt(a.CanvasDisabled),
+		nullTime(a.EmailConfirmedAt), a.PendingEmail, a.TOTPSecret,
+		nullTime(a.TOTPConfirmedAt), nullTime(a.ClosedAt),
 		formatTime(a.UpdatedAt), string(a.ID),
 	)
 	if err != nil {
@@ -168,4 +188,55 @@ func (s *Store) CountAccounts(ctx context.Context) (int, error) {
 		return 0, translate(err, "account count")
 	}
 	return n, nil
+}
+
+// ClosedAccountsBefore finds accounts closed by their owner before a cutoff,
+// which is how the sweeper knows whose grace period has run out.
+func (s *Store) ClosedAccountsBefore(ctx context.Context, before time.Time, limit int) ([]domain.ID, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id FROM accounts
+		WHERE status = ? AND closed_at IS NOT NULL AND closed_at < ?
+		ORDER BY closed_at
+		LIMIT ?`,
+		string(domain.StatusDeactivated), formatTime(before), limit,
+	)
+	if err != nil {
+		return nil, translate(err, "closed accounts")
+	}
+	defer rows.Close()
+	var out []domain.ID
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan closed account: %w", err)
+		}
+		out = append(out, domain.ID(id))
+	}
+	return out, rows.Err()
+}
+
+// DeleteAccount removes an account for good.
+//
+// Everything the member owned goes with it, and that is the schema's doing
+// rather than this function's: posts, comments, reactions, friendships,
+// requests, blocks, invites, sessions, tokens, recovery codes and the profile
+// canvas all reference accounts with ON DELETE CASCADE. The one thing left
+// behind is the audit trail, which records identifiers and reasons for
+// privileged actions and no member content.
+func (s *Store) DeleteAccount(ctx context.Context, id domain.ID) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM accounts WHERE id = ?`, string(id))
+	if err != nil {
+		return translate(err, "account")
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete account: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: account", domain.ErrNotFound)
+	}
+	return nil
 }

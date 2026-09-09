@@ -21,6 +21,9 @@ var fixtureTables = []string{
 	"blocks",
 	"reports",
 	"audit_events",
+	"recovery_codes",
+	"account_tokens",
+	"rate_limits",
 	"sessions",
 	"accounts",
 }

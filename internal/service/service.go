@@ -14,6 +14,7 @@ import (
 	"log/slog"
 
 	"github.com/kurtisrogers/amici/internal/domain"
+	"github.com/kurtisrogers/amici/internal/mail"
 )
 
 // Deps is everything the services need from the outside world.
@@ -21,10 +22,16 @@ type Deps struct {
 	Store  domain.Store
 	Clock  domain.Clock
 	Logger *slog.Logger
-	// Secret keys the invite code HMAC.
+	// Secret keys the invite code and recovery code HMACs.
 	Secret []byte
-	// BaseURL is used to render the link that accompanies an invite code.
+	// BaseURL is used to render the link that accompanies an invite code, and
+	// the links in the few emails Amici sends.
 	BaseURL string
+	// Mailer delivers confirmation and password reset messages. It is never
+	// nil: New substitutes mail.Discard, which fails loudly, so that a
+	// deployment with no mail server configured cannot quietly drop the one
+	// message a member is waiting for.
+	Mailer mail.Sender
 }
 
 // Services is the assembled set, handed to the web layer as one value.
@@ -39,7 +46,7 @@ type Services struct {
 	limiter *limiter
 }
 
-// ForgetRateLimits drops the in-process rate limit counters.
+// ForgetRateLimits drops every rate limit counter.
 //
 // This is for rebuilding the fixture world, and the endpoint that does that
 // exists only when fixtures are enabled, which config.Load refuses to allow in
@@ -47,8 +54,8 @@ type Services struct {
 // client address rather than on an account, so they outlive the accounts they
 // were counting and one test's attempts would still be held against the next
 // one. A reset that leaves them behind is not a reset.
-func (s *Services) ForgetRateLimits() {
-	s.limiter.forgetAll()
+func (s *Services) ForgetRateLimits(ctx context.Context) error {
+	return s.limiter.forgetAll(ctx)
 }
 
 // New wires the services together.
@@ -59,9 +66,13 @@ func New(d Deps) *Services {
 	if d.Logger == nil {
 		d.Logger = slog.Default()
 	}
-	limiter := newLimiter(d.Clock)
+	if d.Mailer == nil {
+		d.Mailer = mail.Discard{}
+	}
+	limiter := newLimiter(d.Store, d.Clock, d.Logger)
+	notifier := &notifier{deps: d}
 	return &Services{
-		Accounts: &Accounts{deps: d, limiter: limiter},
+		Accounts: &Accounts{deps: d, limiter: limiter, notify: notifier},
 		Friends:  &Friends{deps: d, limiter: limiter},
 		Feed:     &Feed{deps: d, limiter: limiter},
 		Canvas:   &Canvas{deps: d, limiter: limiter},

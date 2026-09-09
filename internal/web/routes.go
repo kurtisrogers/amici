@@ -58,6 +58,23 @@ func (s *Server) routes() http.Handler {
 	open("POST /signout", s.handleSignOut)
 	open("GET /about", s.handleAbout)
 
+	// Getting back in. These are open because everybody who needs them has no
+	// session by definition, which is also why each one is rate limited and
+	// why none of them says whether the address or link it was given means
+	// anything.
+	open("GET /signin/code", s.handleTwoFactorForm)
+	open("POST /signin/code", s.handleTwoFactor)
+	open("GET /forgot-password", s.handleForgotForm)
+	open("POST /forgot-password", s.handleForgot)
+	open("GET /reset-password", s.handleResetForm)
+	open("POST /reset-password", s.handleReset)
+	// Confirming an address is open rather than member-only on purpose: the
+	// link usually gets opened on a phone, in a browser that has never signed
+	// in. Following it confirms the address and nothing else — no session is
+	// opened, because reading an email once should not be a way in.
+	open("GET /confirm-email", s.handleConfirmEmailForm)
+	open("POST /confirm-email", s.handleConfirmEmail)
+
 	// The feed and posts.
 	member("GET /feed", s.handleFeed)
 	member("POST /posts", s.handleCreatePost)
@@ -95,6 +112,19 @@ func (s *Server) routes() http.Handler {
 	member("POST /settings/password", s.handleChangePassword)
 	member("POST /settings/sessions/revoke", s.handleRevokeSessions)
 
+	// The address on the account, the second factor, and closing down. Each
+	// of these asks for the current password in its handler, because an open
+	// session on a borrowed laptop is not the same as the person.
+	member("POST /settings/email", s.handleRequestEmailChange)
+	member("POST /settings/email/cancel", s.handleCancelEmailChange)
+	member("POST /settings/email/resend", s.handleResendConfirmation)
+	member("GET /settings/two-factor", s.handleTwoFactorSetup)
+	member("POST /settings/two-factor", s.handleTwoFactorConfirm)
+	member("POST /settings/two-factor/disable", s.handleTwoFactorDisable)
+	member("POST /settings/two-factor/recovery-codes", s.handleRegenerateRecoveryCodes)
+	member("GET /settings/close", s.handleCloseForm)
+	member("POST /settings/close", s.handleClose)
+
 	// The profile canvas editor.
 	member("GET /settings/canvas", s.handleCanvasEditor)
 	member("POST /settings/canvas", s.handleSaveCanvas)
@@ -118,6 +148,7 @@ func (s *Server) routes() http.Handler {
 	if s.cfg.EnableFixtures && s.loadFixtures != nil {
 		mux.Handle("POST /fixtures/reset", chain(http.HandlerFunc(s.handleFixturesReset), base...))
 		mux.Handle("GET /fixtures", chain(http.HandlerFunc(s.handleFixturesInfo), base...))
+		mux.Handle("GET /fixtures/outbox", chain(http.HandlerFunc(s.handleFixturesOutbox), base...))
 	}
 
 	// Anything unrouted. ServeMux would answer "/" for every unmatched path,

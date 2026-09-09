@@ -2,15 +2,18 @@ package service
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/kurtisrogers/amici/internal/brand"
 	"github.com/kurtisrogers/amici/internal/domain"
+	"github.com/kurtisrogers/amici/internal/mail"
 	"github.com/kurtisrogers/amici/internal/security"
 	"github.com/kurtisrogers/amici/internal/store/sqlite"
 )
@@ -69,11 +72,72 @@ var hashedTestPassword = sync.OnceValue(func() string {
 	return h
 })
 
+// testMailer records what would have been sent, so a test can assert on the
+// link in a confirmation email rather than reaching into the token table and
+// proving something the member never sees.
+type testMailer struct {
+	mu       sync.Mutex
+	messages []mail.Message
+	// fail makes every send return an error, for the paths that have to cope
+	// with a mail server being down.
+	fail bool
+}
+
+func (m *testMailer) Send(_ context.Context, msg mail.Message) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.fail {
+		return errors.New("mail is not working today")
+	}
+	m.messages = append(m.messages, msg)
+	return nil
+}
+
+// to returns the messages sent to an address, oldest first.
+func (m *testMailer) to(address string) []mail.Message {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []mail.Message
+	for _, msg := range m.messages {
+		if strings.EqualFold(msg.To, address) {
+			out = append(out, msg)
+		}
+	}
+	return out
+}
+
+// lastLinkTo pulls the token out of the most recent message sent to an
+// address, which is exactly what a member does when they click it.
+func (m *testMailer) lastLinkTo(t *testing.T, address string) string {
+	t.Helper()
+	msgs := m.to(address)
+	if len(msgs) == 0 {
+		t.Fatalf("no message was sent to %s", address)
+	}
+	body := msgs[len(msgs)-1].Body
+	i := strings.Index(body, "token=")
+	if i < 0 {
+		t.Fatalf("the message to %s has no link in it:\n%s", address, body)
+	}
+	token := body[i+len("token="):]
+	if end := strings.IndexAny(token, "\r\n "); end >= 0 {
+		token = token[:end]
+	}
+	return token
+}
+
+func (m *testMailer) forget() {
+	m.mu.Lock()
+	m.messages = nil
+	m.mu.Unlock()
+}
+
 type harness struct {
 	t     *testing.T
 	ctx   context.Context
 	store *sqlite.Store
 	clock *testClock
+	mail  *testMailer
 	svc   *Services
 }
 
@@ -88,11 +152,13 @@ func newHarness(t *testing.T) *harness {
 	t.Cleanup(func() { store.Close() })
 
 	clock := newTestClock()
+	mailer := &testMailer{}
 	return &harness{
 		t:     t,
 		ctx:   ctx,
 		store: store,
 		clock: clock,
+		mail:  mailer,
 		svc: New(Deps{
 			Store:  store,
 			Clock:  clock,
@@ -101,6 +167,7 @@ func newHarness(t *testing.T) *harness {
 			// the next. In production this comes from the environment.
 			Secret:  []byte("test-secret-test-secret-test-sec"),
 			BaseURL: "https://amici.test",
+			Mailer:  mailer,
 		}),
 	}
 }
@@ -125,16 +192,21 @@ func (h *harness) account(handle string, role domain.Role, birthYear int) *domai
 	h.t.Helper()
 	now := h.clock.Now()
 	acct := &domain.Account{
-		ID:               domain.NewID(),
-		Handle:           handle,
-		DisplayName:      handle,
-		Email:            handle + "@example.test",
-		EmailNorm:        domain.NormaliseEmail(handle + "@example.test"),
-		PasswordHash:     hashedTestPassword(),
-		Role:             role,
-		Status:           domain.StatusActive,
-		BirthDate:        domain.Date{Year: birthYear, Month: 6, Day: 1},
-		Colourway:        brand.DefaultColourway,
+		ID:           domain.NewID(),
+		Handle:       handle,
+		DisplayName:  handle,
+		Email:        handle + "@example.test",
+		EmailNorm:    domain.NormaliseEmail(handle + "@example.test"),
+		PasswordHash: hashedTestPassword(),
+		Role:         role,
+		Status:       domain.StatusActive,
+		BirthDate:    domain.Date{Year: birthYear, Month: 6, Day: 1},
+		Colourway:    brand.DefaultColourway,
+		// Confirmed, because an address that nobody has proved they can read
+		// is not reachable, and almost every test here is about what happens
+		// to an account somebody is actually using. The confirmation flow has
+		// its own tests, which create accounts the long way round.
+		EmailConfirmedAt: &now,
 		ReachableByEmail: birthYear <= h.clock.Now().Year()-domain.AdultAgeYears,
 		CreatedAt:        now,
 		UpdatedAt:        now,
@@ -143,6 +215,25 @@ func (h *harness) account(handle string, role domain.Role, birthYear int) *domai
 		h.t.Fatalf("create account %s: %v", handle, err)
 	}
 	return acct
+}
+
+// signIn signs in and returns the account and the session token.
+//
+// Sign-in has two endings, and almost every test in this package is about an
+// account with no second factor, where only one of them is correct. Stopping
+// for a challenge in those tests would mean an empty token threaded through
+// half a dozen assertions before anything complained, so it fails here
+// instead. The second-factor tests call SignIn directly.
+func (h *harness) signIn(in Credentials) (*domain.Account, string, error) {
+	h.t.Helper()
+	result, err := h.svc.Accounts.SignIn(h.ctx, in)
+	if err != nil {
+		return nil, "", err
+	}
+	if !result.Complete() {
+		h.t.Fatalf("signing in as %s stopped for a second factor", in.Email)
+	}
+	return result.Account, result.Token, nil
 }
 
 // befriend makes two accounts friends without going through the request

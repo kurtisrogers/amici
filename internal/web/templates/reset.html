@@ -1,0 +1,34 @@
+{{template "head" .}}
+
+<div class="amici-narrow">
+  <h1>Set a new password</h1>
+  <p>
+    Pick something you will remember. A short phrase beats a clever word, and
+    we would rather you wrote it down somewhere safe than chose something you
+    have used elsewhere.
+  </p>
+
+  <form method="post" action="/reset-password" class="amici-card">
+    {{template "csrf" .CSRF}}
+    <input type="hidden" name="token" value="{{.Data.Token}}">
+
+    {{with .Data.Error}}
+      <div class="amici-flash amici-flash--bad" role="alert"><p>{{.}}</p></div>
+    {{end}}
+
+    <label for="password">New password</label>
+    <input type="password" id="password" name="password"
+      autocomplete="new-password" minlength="{{.Data.PasswordMin}}" required autofocus>
+    <small>At least {{.Data.PasswordMin}} characters.</small>
+
+    <button type="submit">Set my password</button>
+  </form>
+
+  <p class="amici-meta">
+    Setting a new password signs out every browser and phone that was signed
+    in. If somebody else had your old password, this is what takes it away
+    from them.
+  </p>
+</div>
+
+{{template "foot" .}}

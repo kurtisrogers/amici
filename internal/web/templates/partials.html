@@ -57,12 +57,25 @@
     {{else}}
       <a href="/about" {{if eq .Nav "about"}}aria-current="page"{{end}}>About</a>
       <a href="/signin">Sign in</a>
-      <a href="/signup" role="button" class="amici-btn-small">Join</a>
+      <a href="/signup" class="amici-cta amici-cta--small">Join</a>
     {{end}}
   </nav>
 </header>
 <main id="amici-main">
 {{with .Flash}}{{template "flash" .}}{{end}}
+{{if .NeedsEmailConfirmation}}
+  {{/* A reminder, not a wall. The only thing an unconfirmed address costs is
+       being reachable by email, so the notice says exactly that and the rest
+       of Amici carries on working. */}}
+  <div class="amici-flash amici-flash--warn" role="status">
+    <p>Your email address is not confirmed yet, so nobody can reach you by typing it in.</p>
+    <p>Look for a message from {{.Brand.Name}} at {{.Viewer.Email}}, or</p>
+    <form method="post" action="/settings/email/resend" class="amici-inline-form">
+      {{template "csrf" .CSRF}}
+      <button type="submit" class="amici-btn-small">send another link</button>
+    </form>
+  </div>
+{{end}}
 {{end}}
 
 {{define "foot"}}

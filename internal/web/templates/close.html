@@ -1,0 +1,60 @@
+{{template "head" .}}
+
+<div class="amici-narrow">
+  <h1>Close your {{.Brand.Name}} account</h1>
+
+  <div class="amici-card">
+    <h2>What happens straight away</h2>
+    <ul>
+      <li>You are signed out everywhere.</li>
+      <li>
+        Your {{.Data.Posts}} {{pluralise .Data.Posts "post" "posts"}}
+        {{if eq .Data.Posts 1}}leaves{{else}}leave{{end}}
+        your friends' feeds, and your page stops loading for them.
+      </li>
+      <li>
+        Your {{.Data.Friends}} {{pluralise .Data.Friends "friend" "friends"}}
+        {{if eq .Data.Friends 1}}is{{else}}are{{end}}
+        not told. Nobody gets a notification about this.
+      </li>
+      <li>Your request codes stop working.</li>
+    </ul>
+
+    <h2>What happens after {{.Data.GraceDays}} days</h2>
+    <p>
+      Everything is deleted. Not hidden, not marked as closed: the rows are
+      removed. Your posts, your comments, your reactions, your friendships,
+      your page and your email address all go, and we will not be able to get
+      any of it back for you.
+    </p>
+
+    <h2>If you change your mind</h2>
+    <p>
+      {{/* The grace period is the point of this page. People close accounts in
+           bad moments, and a network built for families should not treat a bad
+           moment as final. */}}
+      Sign in at any point in the next {{.Data.GraceDays}} days and your
+      account opens again with everything exactly as it is now. You do not
+      need to ask us, and you do not need to explain.
+    </p>
+  </div>
+
+  <form method="post" action="/settings/close" class="amici-card">
+    {{template "csrf" .CSRF}}
+
+    <label for="current_password">Your password</label>
+    <input type="password" id="current_password" name="current_password"
+      autocomplete="current-password" required>
+    <small>Asked for because an open browser somebody else is using should not be enough to do this.</small>
+
+    <label for="reason">Anything you want to tell us? (optional)</label>
+    <textarea id="reason" name="reason" rows="3"
+      placeholder="You do not have to answer. If you do, it goes in our records and nowhere else."></textarea>
+
+    <button type="submit" class="amici-danger">Close my account</button>
+  </form>
+
+  <p><a href="/settings">No, take me back to settings</a></p>
+</div>
+
+{{template "foot" .}}

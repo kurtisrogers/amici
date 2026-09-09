@@ -1,125 +1,118 @@
 package service
 
 import (
-	"sync"
+	"context"
+	"log/slog"
 	"time"
 
 	"github.com/kurtisrogers/amici/internal/domain"
 )
 
-// limiter is a fixed-window counter keyed by an arbitrary string.
+// limiter is a fixed-window counter keyed by an arbitrary string, counted in
+// the database.
 //
-// It is in-process on purpose. The durable limits that actually matter, such
-// as how many friend requests an account may send in a day, are counted in the
-// database where they survive a restart and hold across instances. This
-// limiter handles the cheap, high-frequency cases: repeated sign-in attempts,
-// invite codes being guessed, someone leaning on a button. Losing its counters
-// on restart is an acceptable cost for not needing Redis to run Amici.
+// It used to be a map in the process, which was a deliberate trade at the
+// time: no Redis to run Amici. What it cost was recorded in docs/security.md
+// as a known gap, and the gap was real in two ways. A restart handed whoever
+// was guessing a password a completely fresh budget, which turns a deploy into
+// an accidental favour to an attacker. And a second instance would have kept
+// its own tally, so the limits would have silently halved in strength the day
+// somebody put two of these behind a load balancer.
+//
+// Counting in SQLite costs one small upsert on paths that are already writing
+// to the database, and the counter is now as durable as everything else. The
+// interface it depends on is domain.RateLimitRepo, so a deployment that
+// outgrows SQLite gets shared limits from whatever it moves to rather than
+// having to reintroduce this problem.
 //
 // A fixed window rather than a token bucket because the failure mode we care
 // about is "thousands of attempts", not "slightly bursty but legitimate", and
 // a counter is easy to reason about when reading a limit in the code.
 type limiter struct {
+	store domain.RateLimitRepo
 	clock domain.Clock
-
-	mu      sync.Mutex
-	windows map[string]*window
-	// lastSweep bounds how often we walk the map to drop stale keys, so the
-	// map cannot grow without limit on a long-running process.
-	lastSweep time.Time
+	log   *slog.Logger
 }
 
-type window struct {
-	count   int
-	resetAt time.Time
-}
-
-func newLimiter(clock domain.Clock) *limiter {
-	return &limiter{clock: clock, windows: map[string]*window{}}
+func newLimiter(store domain.RateLimitRepo, clock domain.Clock, log *slog.Logger) *limiter {
+	return &limiter{store: store, clock: clock, log: log}
 }
 
 // allow records an attempt against key and reports whether it is within
 // limit. Use it where every call is itself the thing being rationed, such as
 // writing a post.
-func (l *limiter) allow(key string, limit int, per time.Duration) bool {
-	now := l.clock.Now()
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	l.sweep(now)
-
-	w, ok := l.windows[key]
-	if !ok || now.After(w.resetAt) {
-		l.windows[key] = &window{count: 1, resetAt: now.Add(per)}
+func (l *limiter) allow(ctx context.Context, key string, limit int, per time.Duration) bool {
+	count, err := l.store.IncrementRateLimit(ctx, key, per, l.clock.Now())
+	if err != nil {
+		// Failing open is the right way round here, and it is a choice worth
+		// being explicit about. A rate limiter is a defence against abuse, not
+		// the thing standing between a stranger and your posts; if the
+		// counter cannot be written, refusing to let anybody post would turn
+		// a database hiccup into an outage. The limits that guard the
+		// privacy-sensitive route, friend requests by email, are counted
+		// separately from the requests table itself, so they hold even when
+		// this does not.
+		l.warn("could not count a rate limited attempt", key, err)
 		return true
 	}
-	if w.count >= limit {
-		return false
-	}
-	w.count++
-	return true
+	return count <= limit
 }
 
 // exceeded reports whether key has already reached limit, without recording
 // anything. Pair it with record where only some outcomes are chargeable.
-func (l *limiter) exceeded(key string, limit int) bool {
-	now := l.clock.Now()
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	w, ok := l.windows[key]
-	if !ok || now.After(w.resetAt) {
+func (l *limiter) exceeded(ctx context.Context, key string, limit int) bool {
+	count, err := l.store.RateLimitCount(ctx, key, l.clock.Now())
+	if err != nil {
+		l.warn("could not read a rate limit counter", key, err)
 		return false
 	}
-	return w.count >= limit
+	return count >= limit
 }
 
 // record counts one attempt against key, whatever the current total.
-func (l *limiter) record(key string, per time.Duration) {
-	now := l.clock.Now()
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	l.sweep(now)
-
-	w, ok := l.windows[key]
-	if !ok || now.After(w.resetAt) {
-		l.windows[key] = &window{count: 1, resetAt: now.Add(per)}
-		return
+func (l *limiter) record(ctx context.Context, key string, per time.Duration) {
+	if _, err := l.store.IncrementRateLimit(ctx, key, per, l.clock.Now()); err != nil {
+		l.warn("could not record a rate limited attempt", key, err)
 	}
-	w.count++
-}
-
-// sweep drops expired keys so the map cannot grow without bound. The caller
-// holds the mutex.
-func (l *limiter) sweep(now time.Time) {
-	if now.Sub(l.lastSweep) <= 10*time.Minute {
-		return
-	}
-	for k, w := range l.windows {
-		if now.After(w.resetAt) {
-			delete(l.windows, k)
-		}
-	}
-	l.lastSweep = now
 }
 
 // reset clears a key, used after a successful sign-in so that a member who
 // mistyped their password a few times is not still being throttled.
-func (l *limiter) reset(key string) {
-	l.mu.Lock()
-	delete(l.windows, key)
-	l.mu.Unlock()
+func (l *limiter) reset(ctx context.Context, key string) {
+	if err := l.store.ClearRateLimit(ctx, key); err != nil {
+		l.warn("could not clear a rate limit counter", key, err)
+	}
 }
 
 // forgetAll drops every counter. See Services.ForgetRateLimits.
-func (l *limiter) forgetAll() {
-	l.mu.Lock()
-	l.windows = map[string]*window{}
-	l.mu.Unlock()
+func (l *limiter) forgetAll(ctx context.Context) error {
+	return l.store.ClearAllRateLimits(ctx)
+}
+
+// warn logs a limiter failure without logging the key.
+//
+// Keys are built from client addresses and email addresses, so a log line
+// containing one would put in a log file exactly the thing Amici goes to
+// lengths not to keep. The action is enough to find the call site.
+func (l *limiter) warn(msg, key string, err error) {
+	if l.log == nil {
+		return
+	}
+	l.log.Warn(msg,
+		slog.String("limit", keyFamily(key)),
+		slog.String("error", err.Error()),
+	)
+}
+
+// keyFamily reduces a key to the part that names the limit, dropping the part
+// that names the person.
+func keyFamily(key string) string {
+	for i := 0; i < len(key); i++ {
+		if key[i] == ':' {
+			return key[:i]
+		}
+	}
+	return key
 }
 
 // The limits themselves. They are gathered here rather than scattered through
@@ -138,10 +131,30 @@ const (
 	signInFailuresPerClient = 30
 	signInWindow            = 15 * time.Minute
 
+	// Wrong codes at the second factor step, counted per account as well as
+	// against the individual challenge. The per-challenge count in
+	// domain.MaxTwoFactorAttempts stops one sign-in being used for a run of
+	// guesses; this stops somebody who knows the password from starting a
+	// fresh challenge for every guess.
+	twoFactorFailuresPerAccount = 20
+	twoFactorWindow             = 15 * time.Minute
+
 	// Registrations from one client address. Low, because Amici does not grow
 	// by the thousand and a burst is always somebody automating.
 	registrationsPerClient = 5
 	registrationWindow     = time.Hour
+
+	// Emails we will send on somebody's behalf, per account and per client.
+	//
+	// This is the limit that keeps Amici from being used to post somebody
+	// else's letterbox full: without it, typing a stranger's address into the
+	// password reset form repeatedly is a way to send them mail signed by us.
+	// The per-account count is also stored in the tokens table, so it holds
+	// across a restart.
+	confirmationEmailsPerDay   = 5
+	passwordResetsPerDay       = 5
+	accountEmailsPerClientHour = 20
+	accountEmailWindow         = 24 * time.Hour
 
 	// Friend requests addressed by email. This is the important one: without
 	// it, the email route is a tool for testing whether an address belongs to

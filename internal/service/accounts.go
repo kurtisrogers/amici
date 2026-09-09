@@ -13,9 +13,17 @@ import (
 )
 
 // Accounts covers registration, sessions and a member's own settings.
+//
+// The flows that lean on an email address live in verification.go, the second
+// factor in twofactor.go, and closing an account in closure.go. They are all
+// methods on this type because they are all the same subject from a member's
+// point of view — the account itself — and splitting them across types would
+// mean the web layer had to know which of four services owns "change my email
+// address".
 type Accounts struct {
 	deps    Deps
 	limiter *limiter
+	notify  *notifier
 }
 
 // Registration is what the sign-up form collects.
@@ -31,6 +39,11 @@ type Registration struct {
 	// Role is only ever set by the fixtures loader and the first-run
 	// bootstrap. The sign-up form cannot reach it.
 	Role domain.Role
+	// EmailAlreadyConfirmed skips the confirmation step. Only the fixtures
+	// loader sets it: a development cast whose addresses do not exist cannot
+	// confirm them, and making every local account start unconfirmed would
+	// mean nothing in the fixture world could be reached by email.
+	EmailAlreadyConfirmed bool
 }
 
 // errGenericRegistration is returned for every collision, whether the handle
@@ -51,7 +64,7 @@ var errGenericRegistration = fmt.Errorf(
 
 // Register creates an account.
 func (a *Accounts) Register(ctx context.Context, in Registration) (*domain.Account, error) {
-	if in.ClientKey != "" && !a.limiter.allow("register:"+in.ClientKey, registrationsPerClient, registrationWindow) {
+	if in.ClientKey != "" && !a.limiter.allow(ctx, "register:"+in.ClientKey, registrationsPerClient, registrationWindow) {
 		return nil, fmt.Errorf("%w: that is a lot of new accounts from one place. Please wait a little while", domain.ErrRateLimited)
 	}
 
@@ -67,7 +80,7 @@ func (a *Accounts) Register(ctx context.Context, in Registration) (*domain.Accou
 	if err != nil {
 		return nil, err
 	}
-	if err := security.ValidatePassword(in.Password); err != nil {
+	if err := security.ValidatePasswordFor(in.Password, security.PersonalTokensFor(handle, displayName, email)); err != nil {
 		return nil, fmt.Errorf("%w: %s", domain.ErrValidation, err.Error())
 	}
 	birth, err := domain.ParseDate(in.BirthDate)
@@ -119,6 +132,10 @@ func (a *Accounts) Register(ctx context.Context, in Registration) (*domain.Accou
 		UpdatedAt:        now,
 	}
 
+	if in.EmailAlreadyConfirmed {
+		acct.EmailConfirmedAt = &now
+	}
+
 	if err := a.deps.Store.CreateAccount(ctx, acct); err != nil {
 		if isConflict(err) {
 			return nil, errGenericRegistration
@@ -128,6 +145,19 @@ func (a *Accounts) Register(ctx context.Context, in Registration) (*domain.Accou
 
 	a.deps.audit(ctx, acct.ID, domain.AuditAccountCreated, string(acct.ID),
 		fmt.Sprintf("role=%s", acct.Role))
+
+	if !acct.EmailConfirmed() {
+		// A failure to send is logged rather than returned, and the account
+		// stays. Undoing a registration because a mail server was briefly
+		// unreachable would be the wrong trade: the member can ask for
+		// another link from the banner that will be waiting for them, and
+		// until they confirm, the only thing they are missing is being
+		// reachable by email address.
+		if err := a.SendEmailConfirmation(ctx, acct, in.ClientKey); err != nil {
+			a.deps.Logger.Error("could not send a confirmation link",
+				"account", acct.ID, "error", err)
+		}
+	}
 	return acct, nil
 }
 
@@ -139,27 +169,48 @@ type Credentials struct {
 	ClientKey string
 }
 
+// SignInResult is what a successful password step produced.
+//
+// It has two shapes because sign-in has two endings. Either the member is in,
+// and there is a session token to put in a cookie, or they have a second
+// factor and there is a challenge to answer. Returning one type for both keeps
+// the web layer from having to guess which happened.
+type SignInResult struct {
+	Account *domain.Account
+	// Token is the session secret, set only when sign-in is complete.
+	Token string
+	// Challenge is set instead when a code is needed.
+	Challenge *TwoFactorChallenge
+	// Reopened is true when signing in brought a closed account back.
+	Reopened bool
+}
+
+// Complete reports whether the member is signed in. When it is false, the
+// password was right and Challenge holds what to ask for next; a failed
+// sign-in comes back as an error instead, never as an incomplete result.
+func (r *SignInResult) Complete() bool { return r.Token != "" }
+
 // SignIn verifies credentials and opens a session. It returns the account and
 // the session token to put in a cookie; the token is never stored.
-func (a *Accounts) SignIn(ctx context.Context, in Credentials) (*domain.Account, string, error) {
+func (a *Accounts) SignIn(ctx context.Context, in Credentials) (*SignInResult, error) {
 	emailNorm := domain.NormaliseEmail(in.Email)
 	clientKey := "signin:client:" + in.ClientKey
 	emailKey := "signin:email:" + emailNorm
 
 	// Both budgets are checked before any work is done, and spent only by a
 	// failure further down. See signInFailuresPerClient for why.
-	if in.ClientKey != "" && a.limiter.exceeded(clientKey, signInFailuresPerClient) {
-		return nil, "", fmt.Errorf("%w: too many sign-in attempts. Please wait a few minutes", domain.ErrRateLimited)
+	if in.ClientKey != "" && a.limiter.exceeded(ctx, clientKey, signInFailuresPerClient) {
+		return nil, fmt.Errorf("%w: too many sign-in attempts. Please wait a few minutes", domain.ErrRateLimited)
 	}
-	if emailNorm != "" && a.limiter.exceeded(emailKey, signInFailuresPerEmail) {
-		return nil, "", fmt.Errorf("%w: too many sign-in attempts for that account. Please wait a few minutes", domain.ErrRateLimited)
+	if emailNorm != "" && a.limiter.exceeded(ctx, emailKey, signInFailuresPerEmail) {
+		return nil, fmt.Errorf("%w: too many sign-in attempts for that account. Please wait a few minutes", domain.ErrRateLimited)
 	}
 	failed := func() {
 		if in.ClientKey != "" {
-			a.limiter.record(clientKey, signInWindow)
+			a.limiter.record(ctx, clientKey, signInWindow)
 		}
 		if emailNorm != "" {
-			a.limiter.record(emailKey, signInWindow)
+			a.limiter.record(ctx, emailKey, signInWindow)
 		}
 	}
 
@@ -172,28 +223,40 @@ func (a *Accounts) SignIn(ctx context.Context, in Credentials) (*domain.Account,
 			// to keep to itself.
 			security.BurnPasswordTime(in.Password)
 			failed()
-			return nil, "", domain.ErrCredentials
+			return nil, domain.ErrCredentials
 		}
-		return nil, "", fmt.Errorf("look up account: %w", err)
+		return nil, fmt.Errorf("look up account: %w", err)
 	}
 
 	ok, needsRehash, err := security.VerifyPassword(acct.PasswordHash, in.Password)
 	if err != nil {
-		return nil, "", fmt.Errorf("verify password for %s: %w", acct.ID, err)
+		return nil, fmt.Errorf("verify password for %s: %w", acct.ID, err)
 	}
 	if !ok {
 		failed()
-		return nil, "", domain.ErrCredentials
+		return nil, domain.ErrCredentials
 	}
 
 	// The status check happens after the password check on purpose. Answering
 	// "this account is suspended" to anyone who types the address would turn
 	// suspension into public information.
+	reopened := false
 	switch acct.Status {
 	case domain.StatusSuspended:
-		return nil, "", fmt.Errorf("%w: this account is suspended. Please get in touch with support", domain.ErrForbidden)
+		return nil, fmt.Errorf("%w: this account is suspended. Please get in touch with support", domain.ErrForbidden)
 	case domain.StatusDeactivated:
-		return nil, "", fmt.Errorf("%w: this account has been closed", domain.ErrForbidden)
+		// Somebody closing their account and then coming back inside the
+		// grace period is the case this exists for, and it is a case worth
+		// handling gently: they type their password and everything is where
+		// they left it. Past the window there is nothing to sign in to,
+		// because the rows are gone.
+		if !acct.Reopenable(a.deps.Clock.Now()) {
+			return nil, fmt.Errorf("%w: this account has been closed", domain.ErrForbidden)
+		}
+		if acct, err = a.reopen(ctx, acct); err != nil {
+			return nil, err
+		}
+		reopened = true
 	}
 
 	if needsRehash {
@@ -208,19 +271,30 @@ func (a *Accounts) SignIn(ctx context.Context, in Credentials) (*domain.Account,
 		}
 	}
 
-	token, err := a.openSession(ctx, acct.ID, in.UserAgent)
-	if err != nil {
-		return nil, "", err
-	}
-
 	// They have proved who they are, so this account's budget should not
 	// still be holding their earlier typos against them. The client budget is
 	// deliberately left alone: clearing it would let somebody with one valid
 	// account of their own wipe the counter between guesses at everybody
 	// else's, which is exactly the spraying that limit exists to stop.
-	a.limiter.reset(emailKey)
+	a.limiter.reset(ctx, emailKey)
+
+	// A second factor stops here. No session is opened, and the challenge
+	// stands for nothing more than "somebody at this browser knew the
+	// password", which is precisely what has been proved so far.
+	if acct.TwoFactorEnabled() {
+		challenge, cerr := a.beginChallenge(ctx, acct)
+		if cerr != nil {
+			return nil, cerr
+		}
+		return &SignInResult{Account: acct, Challenge: challenge, Reopened: reopened}, nil
+	}
+
+	token, err := a.openSession(ctx, acct.ID, in.UserAgent)
+	if err != nil {
+		return nil, err
+	}
 	a.deps.audit(ctx, acct.ID, domain.AuditAccountSignIn, string(acct.ID), "")
-	return acct, token, nil
+	return &SignInResult{Account: acct, Token: token, Reopened: reopened}, nil
 }
 
 // openSession mints a session token and stores its hash.
@@ -368,7 +442,7 @@ func (a *Accounts) ChangePassword(ctx context.Context, actor *domain.Account, cu
 	if !ok {
 		return fmt.Errorf("%w: that is not your current password", domain.ErrCredentials)
 	}
-	if err := security.ValidatePassword(next); err != nil {
+	if err := security.ValidatePasswordFor(next, personalTokens(actor)); err != nil {
 		return fmt.Errorf("%w: %s", domain.ErrValidation, err.Error())
 	}
 	if strings.TrimSpace(next) == strings.TrimSpace(current) {
@@ -391,6 +465,19 @@ func (a *Accounts) ChangePassword(ctx context.Context, actor *domain.Account, cu
 	// make the change pointless.
 	if err := a.deps.Store.DeleteSessionsForAccount(ctx, actor.ID); err != nil {
 		return fmt.Errorf("clear sessions: %w", err)
+	}
+	// Reset links in flight stop working too. Somebody who asked for one and
+	// then remembered their password should not leave a live link behind in a
+	// mailbox.
+	if err := a.deps.Store.DeleteTokensForAccount(ctx, actor.ID, domain.PurposePasswordReset); err != nil {
+		a.deps.Logger.Warn("could not clear reset links", "error", err)
+	}
+
+	// Told, not asked. This is how a member finds out that somebody else
+	// changed their password, so a delivery failure is worth a loud log but
+	// must not undo a change the member made on purpose.
+	if err := a.notify.sendPasswordChanged(ctx, &updated); err != nil {
+		a.deps.Logger.Warn("could not send a password change notice", "error", err)
 	}
 
 	a.deps.audit(ctx, actor.ID, domain.AuditPasswordChanged, string(actor.ID), "")
@@ -417,20 +504,54 @@ func (a *Accounts) Reload(ctx context.Context, id domain.ID) (*domain.Account, e
 	return acct, nil
 }
 
-// PurgeExpired removes expired sessions and spent invites. The server calls
-// this on a timer. Both are cases of not keeping data we have no use for.
-func (a *Accounts) PurgeExpired(ctx context.Context) (sessions, invites int, err error) {
+// Housekeeping counts what one sweep removed.
+type Housekeeping struct {
+	Sessions        int
+	Invites         int
+	Tokens          int
+	RateLimits      int
+	AccountsDeleted int
+}
+
+// Any reports whether the sweep did anything, so the caller can stay quiet
+// when it did not.
+func (h Housekeeping) Any() bool {
+	return h.Sessions+h.Invites+h.Tokens+h.RateLimits+h.AccountsDeleted > 0
+}
+
+// PurgeExpired removes everything Amici has finished needing. The server calls
+// this on a timer.
+//
+// Every line of it is the same idea: data you do not hold cannot leak. Expired
+// sessions, spent links, rate limit counters keyed on client addresses, and
+// accounts whose owner closed them a month ago are all things whose usefulness
+// has a defined end, and the sweep is what makes that end real rather than
+// aspirational.
+func (a *Accounts) PurgeExpired(ctx context.Context) (Housekeeping, error) {
 	now := a.deps.Clock.Now()
-	sessions, err = a.deps.Store.DeleteExpiredSessions(ctx, now)
-	if err != nil {
-		return 0, 0, fmt.Errorf("purge sessions: %w", err)
+	var out Housekeeping
+	var err error
+
+	if out.Sessions, err = a.deps.Store.DeleteExpiredSessions(ctx, now); err != nil {
+		return out, fmt.Errorf("purge sessions: %w", err)
 	}
 	// Expired invites are kept for a grace period so that redeeming a code
 	// that has just run out can say so, instead of pretending it never
 	// existed.
-	invites, err = a.deps.Store.PurgeExpiredInvites(ctx, now.Add(-inviteGracePeriod))
-	if err != nil {
-		return sessions, 0, fmt.Errorf("purge invites: %w", err)
+	if out.Invites, err = a.deps.Store.PurgeExpiredInvites(ctx, now.Add(-inviteGracePeriod)); err != nil {
+		return out, fmt.Errorf("purge invites: %w", err)
 	}
-	return sessions, invites, nil
+	// Spent and expired links are kept for the same short grace period and
+	// for the same reason: following a link twice should be told it has been
+	// used rather than that it never existed.
+	if out.Tokens, err = a.deps.Store.PurgeExpiredTokens(ctx, now.Add(-inviteGracePeriod)); err != nil {
+		return out, fmt.Errorf("purge tokens: %w", err)
+	}
+	if out.RateLimits, err = a.deps.Store.PurgeExpiredRateLimits(ctx, now); err != nil {
+		return out, fmt.Errorf("purge rate limits: %w", err)
+	}
+	if out.AccountsDeleted, err = a.PurgeClosedAccounts(ctx); err != nil {
+		return out, err
+	}
+	return out, nil
 }

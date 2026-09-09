@@ -279,7 +279,7 @@ func (s *Support) Report(ctx context.Context, actor *domain.Account, in NewRepor
 	if len([]rune(reason)) > ReportReasonMaxLen {
 		return fmt.Errorf("%w: reports can be at most %d characters", domain.ErrValidation, ReportReasonMaxLen)
 	}
-	if !s.limiter.allow("report:"+string(actor.ID), reportsPerDay, 24*time.Hour) {
+	if !s.limiter.allow(ctx, "report:"+string(actor.ID), reportsPerDay, 24*time.Hour) {
 		return fmt.Errorf("%w: you have raised a lot of reports today. If something urgent is happening, please email us", domain.ErrRateLimited)
 	}
 
